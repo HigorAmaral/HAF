@@ -12,28 +12,35 @@ export interface RunMonitorResult {
   errors: Array<{ source: string; message: string }>;
 }
 
-export async function runJobMonitor(): Promise<RunMonitorResult> {
+export async function runJobMonitorForUser(
+  userId: number
+): Promise<RunMonitorResult> {
   await ensureSchema();
   const sql = getSql();
 
   const runRows = await sql`
-    INSERT INTO scrape_runs (status)
-    VALUES ('running')
+    INSERT INTO scrape_runs (user_id, status)
+    VALUES (${userId}, 'running')
     RETURNING id
   `;
   const runId = runRows[0].id as number;
 
   try {
     const sources = (await sql`
-      SELECT * FROM sources WHERE enabled = TRUE ORDER BY id ASC
+      SELECT * FROM sources
+      WHERE user_id = ${userId} AND enabled = TRUE
+      ORDER BY id ASC
     `) as SourceRecord[];
 
     const keywords = (await sql`
-      SELECT * FROM keywords ORDER BY id ASC
+      SELECT * FROM keywords WHERE user_id = ${userId} ORDER BY id ASC
     `) as KeywordRecord[];
 
-    const normalizedTerms = keywords.map((k) => k.term.trim().toLowerCase()).filter(Boolean);
+    const normalizedTerms = keywords
+      .map((k) => k.term.trim().toLowerCase())
+      .filter(Boolean);
 
+    // Busca em TODAS as fontes ativas de uma vez só (em paralelo)
     const results = await Promise.allSettled(
       sources.map(async (source) => {
         try {
@@ -83,8 +90,9 @@ export async function runJobMonitor(): Promise<RunMonitorResult> {
 
       for (const job of filtered) {
         const rows = (await sql`
-          INSERT INTO jobs (external_id, source_id, source_name, title, company, location, url, published_at)
+          INSERT INTO jobs (user_id, external_id, source_id, source_name, title, company, location, url, published_at)
           VALUES (
+            ${userId},
             ${job.externalId},
             ${source.id},
             ${source.name},
@@ -94,7 +102,7 @@ export async function runJobMonitor(): Promise<RunMonitorResult> {
             ${job.url},
             ${job.publishedAt || null}
           )
-          ON CONFLICT (external_id) DO NOTHING
+          ON CONFLICT (COALESCE(user_id, 0), external_id) DO NOTHING
           RETURNING *
         `) as JobRecord[];
 
@@ -104,7 +112,7 @@ export async function runJobMonitor(): Promise<RunMonitorResult> {
       }
     }
 
-    const alertSettings = await getAlertSettings();
+    const alertSettings = await getAlertSettings(userId);
     const notifications = await notifyNewJobs(insertedJobs, alertSettings);
 
     if (
@@ -144,4 +152,27 @@ export async function runJobMonitor(): Promise<RunMonitorResult> {
     `;
     throw err;
   }
+}
+
+export async function runJobMonitorAllUsers(): Promise<{
+  usersProcessed: number;
+  results: Array<{ userId: number; newJobsCount: number }>;
+}> {
+  await ensureSchema();
+  const sql = getSql();
+  const users = (await sql`SELECT id FROM users ORDER BY id ASC`) as Array<{
+    id: number;
+  }>;
+
+  const results: Array<{ userId: number; newJobsCount: number }> = [];
+  for (const u of users) {
+    try {
+      const r = await runJobMonitorForUser(u.id);
+      results.push({ userId: u.id, newJobsCount: r.newJobsCount });
+    } catch {
+      results.push({ userId: u.id, newJobsCount: 0 });
+    }
+  }
+
+  return { usersProcessed: users.length, results };
 }

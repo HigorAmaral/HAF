@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runJobMonitor } from "@/lib/scrapers/runner";
+import { runJobMonitorAllUsers } from "@/lib/scrapers/runner";
 
 export const maxDuration = 60;
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const result = await runJobMonitor();
+    const result = await runJobMonitorAllUsers();
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro no cron";

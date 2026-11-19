@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 import { ensureSchema, getSql } from "@/lib/db";
 import type { SourceType } from "@/lib/scrapers/types";
 
@@ -27,6 +28,11 @@ const NO_TARGET_TYPES: SourceType[] = [
 ];
 
 export async function POST(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     await ensureSchema();
     const sql = getSql();
@@ -60,8 +66,8 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await sql`
-      INSERT INTO sources (name, type, target, selector, enabled)
-      VALUES (${name}, ${type}, ${target}, ${selector}, TRUE)
+      INSERT INTO sources (user_id, name, type, target, selector, enabled)
+      VALUES (${user.userId}, ${name}, ${type}, ${target}, ${selector}, TRUE)
       RETURNING *
     `;
 

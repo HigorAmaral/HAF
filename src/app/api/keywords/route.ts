@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 import { ensureSchema, getSql } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     await ensureSchema();
     const sql = getSql();
@@ -16,9 +22,9 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await sql`
-      INSERT INTO keywords (term)
-      VALUES (${term})
-      ON CONFLICT (term) DO NOTHING
+      INSERT INTO keywords (user_id, term)
+      VALUES (${user.userId}, ${term})
+      ON CONFLICT (COALESCE(user_id, 0), term) DO NOTHING
       RETURNING *
     `;
 
