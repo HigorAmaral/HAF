@@ -13,7 +13,7 @@ function makeHash(input: string): string {
   return crypto.createHash("sha256").update(input).digest("hex").slice(0, 24);
 }
 
-async function fetchWithTimeout(url: string, timeoutMs = 15000): Promise<Response> {
+async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -556,6 +556,57 @@ async function scrapeGithubIssues(
     }));
 }
 
+async function scrapeTheMuse(): Promise<ScrapedJob[]> {
+  const res = await fetchWithTimeout(
+    "https://www.themuse.com/api/public/jobs?page=1"
+  );
+  const data = (await res.json()) as {
+    results?: Array<{
+      id: number;
+      name: string;
+      company?: { name?: string };
+      locations?: Array<{ name?: string }>;
+      refs?: { landing_page?: string };
+      publication_date?: string;
+    }>;
+  };
+
+  return (data.results ?? [])
+    .filter((j) => j.name && j.refs?.landing_page)
+    .map((job) => ({
+      externalId: `themuse:${job.id}`,
+      title: job.name,
+      company: job.company?.name || "Empresa não informada",
+      location:
+        job.locations?.map((l) => l.name).filter(Boolean).join(", ") ||
+        "Não informado",
+      url: job.refs!.landing_page!,
+      publishedAt: job.publication_date,
+    }));
+}
+
+async function scrapeWorkingNomads(): Promise<ScrapedJob[]> {
+  const res = await fetchWithTimeout(
+    "https://www.workingnomads.com/api/exposed_jobs/"
+  );
+  const data = (await res.json()) as Array<{
+    url: string;
+    title: string;
+    company_name?: string;
+    location?: string;
+    pub_date?: string;
+  }>;
+
+  return (data ?? []).slice(0, 50).map((job) => ({
+    externalId: `wn:${makeHash(job.url)}`,
+    title: job.title,
+    company: job.company_name || "Empresa não informada",
+    location: job.location || "Remoto",
+    url: job.url,
+    publishedAt: job.pub_date,
+  }));
+}
+
 export async function runSourceConnector(source: SourceRecord): Promise<ScrapedJob[]> {
   switch (source.type) {
     case "remotive":
@@ -568,6 +619,10 @@ export async function runSourceConnector(source: SourceRecord): Promise<ScrapedJ
       return scrapeJobicy();
     case "himalayas":
       return scrapeHimalayas();
+    case "themuse":
+      return scrapeTheMuse();
+    case "workingnomads":
+      return scrapeWorkingNomads();
     case "greenhouse":
       return scrapeGreenhouse(source.target);
     case "lever":

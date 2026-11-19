@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { DEFAULT_SOURCES } from "./defaultSources";
 
 let schemaPromise: Promise<void> | null = null;
 
@@ -119,6 +120,17 @@ export async function ensureSchema(): Promise<void> {
         PRIMARY KEY (user_id, key)
       )
     `;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
   })().catch((err) => {
     schemaPromise = null;
     throw err;
@@ -132,20 +144,40 @@ export async function seedDefaultSourcesForUser(userId: number): Promise<void> {
   const sql = getSql();
   const existing = await sql`SELECT COUNT(*)::int AS count FROM sources WHERE user_id = ${userId}`;
   if (existing[0]?.count === 0) {
-    await sql`
-      INSERT INTO sources (user_id, name, type, target, enabled)
-      VALUES
-        (${userId}, 'Remotive (Vagas Remotas)', 'remotive', 'all', TRUE),
-        (${userId}, 'Arbeitnow (Tech & Remoto)', 'arbeitnow', 'all', TRUE),
-        (${userId}, 'RemoteOK (Global Remoto)', 'remoteok', 'all', TRUE),
-        (${userId}, 'Jobicy (Remoto Internacional)', 'jobicy', 'all', TRUE),
-        (${userId}, 'Himalayas (Tech Remoto)', 'himalayas', 'all', TRUE),
-        (${userId}, 'WeWorkRemotely (RSS)', 'rss', 'https://weworkremotely.com/remote-jobs.rss', TRUE),
-        (${userId}, 'FrontendBR (GitHub Vagas)', 'github_issues', 'frontendbr/vagas', TRUE),
-        (${userId}, 'BackendBR (GitHub Vagas)', 'github_issues', 'backend-br/vagas', TRUE),
-        (${userId}, 'React Brasil (GitHub Vagas)', 'github_issues', 'react-brasil/vagas', TRUE)
-    `;
+    for (const src of DEFAULT_SOURCES) {
+      await sql`
+        INSERT INTO sources (user_id, name, type, target, enabled)
+        VALUES (${userId}, ${src.name}, ${src.type}, ${src.target}, TRUE)
+      `;
+    }
   }
+}
+
+export async function syncMissingDefaultSourcesForUser(
+  userId: number
+): Promise<number> {
+  await ensureSchema();
+  const sql = getSql();
+  const current = (await sql`
+    SELECT type, target FROM sources WHERE user_id = ${userId}
+  `) as Array<{ type: string; target: string }>;
+
+  const existingKeys = new Set(current.map((s) => `${s.type}:${s.target}`));
+  let added = 0;
+
+  for (const src of DEFAULT_SOURCES) {
+    const key = `${src.type}:${src.target}`;
+    if (!existingKeys.has(key)) {
+      await sql`
+        INSERT INTO sources (user_id, name, type, target, enabled)
+        VALUES (${userId}, ${src.name}, ${src.type}, ${src.target}, TRUE)
+      `;
+      existingKeys.add(key);
+      added++;
+    }
+  }
+
+  return added;
 }
 
 export async function getAlertSettings(userId?: number): Promise<{

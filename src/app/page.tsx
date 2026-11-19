@@ -137,6 +137,16 @@ const SOURCE_HELP: Record<
     placeholder: "all",
     hint: "Não precisa de URL; busca vagas remotas na API do Himalayas.",
   },
+  themuse: {
+    label: "The Muse (API Global)",
+    placeholder: "all",
+    hint: "Não precisa de URL; busca vagas na API oficial do The Muse.",
+  },
+  workingnomads: {
+    label: "Working Nomads (API Global)",
+    placeholder: "all",
+    hint: "Não precisa de URL; busca vagas remotas no Working Nomads.",
+  },
 };
 
 const NO_TARGET_TYPES: SourceType[] = [
@@ -145,6 +155,8 @@ const NO_TARGET_TYPES: SourceType[] = [
   "remoteok",
   "jobicy",
   "himalayas",
+  "themuse",
+  "workingnomads",
 ];
 
 type TabKey = "jobs" | "resume" | "settings";
@@ -409,7 +421,7 @@ export default function HomePage() {
       includeRemote,
     };
 
-    return data.jobs.filter((j) => {
+    const list = data.jobs.filter((j) => {
       const matchesSearch =
         !q ||
         `${j.title} ${j.company} ${j.location || ""} ${j.source_name}`
@@ -421,7 +433,17 @@ export default function HomePage() {
       );
       return matchesSearch && matchesLoc;
     });
-  }, [data?.jobs, search, filterState, filterCities, includeRemote]);
+
+    if (resumeTerms.length === 0) return list;
+
+    return [...list].sort((a, b) => {
+      const hayA = `${a.title} ${a.company} ${a.location || ""}`.toLowerCase();
+      const hayB = `${b.title} ${b.company} ${b.location || ""}`.toLowerCase();
+      const scoreA = resumeTerms.filter((t) => hayA.includes(t)).length;
+      const scoreB = resumeTerms.filter((t) => hayB.includes(t)).length;
+      return scoreB - scoreA;
+    });
+  }, [data?.jobs, search, filterState, filterCities, includeRemote, resumeTerms]);
 
   if (authState === "checking") {
     return (
@@ -1005,9 +1027,31 @@ export default function HomePage() {
                 </section>
 
                 <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-                  <h2 className="mb-3 font-semibold">
-                    Fontes Varridas Simultaneamente ({data?.sources.length ?? 0})
-                  </h2>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-semibold">
+                      Fontes Varridas Simultaneamente ({data?.sources.length ?? 0})
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await fetch("/api/sources/sync-defaults", {
+                          method: "POST",
+                        });
+                        const json = await res.json();
+                        if (res.ok) {
+                          showToast(
+                            json.added > 0
+                              ? `${json.added} novas fontes confiáveis adicionadas!`
+                              : "Todas as fontes padrão já estão cadastradas."
+                          );
+                          await fetchDashboard();
+                        }
+                      }}
+                      className="rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-3 py-1.5 text-xs font-medium text-indigo-300 transition hover:bg-indigo-500/25"
+                    >
+                      + Carregar Fontes Confiáveis (34)
+                    </button>
+                  </div>
                   <div className="grid gap-2.5 sm:grid-cols-2">
                     {data?.sources.map((src) => (
                       <div

@@ -4,6 +4,8 @@ export type SourceType =
   | "remoteok"
   | "jobicy"
   | "himalayas"
+  | "themuse"
+  | "workingnomads"
   | "greenhouse"
   | "lever"
   | "ashby"

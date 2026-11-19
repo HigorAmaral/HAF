@@ -9,6 +9,8 @@ const ALLOWED_TYPES: SourceType[] = [
   "remoteok",
   "jobicy",
   "himalayas",
+  "themuse",
+  "workingnomads",
   "greenhouse",
   "lever",
   "ashby",
@@ -25,6 +27,8 @@ const NO_TARGET_TYPES: SourceType[] = [
   "remoteok",
   "jobicy",
   "himalayas",
+  "themuse",
+  "workingnomads",
 ];
 
 export async function POST(req: NextRequest) {
