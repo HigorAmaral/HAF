@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
       summary?: string;
       experience?: string;
       education?: string;
+      photoUrl?: string;
+      location?: string;
+      linkedinUrl?: string;
+      portfolioUrl?: string;
+      languages?: string;
+      certifications?: string;
+      workModel?: string;
       autoSearch?: boolean;
     };
 
@@ -50,14 +57,25 @@ export async function POST(req: NextRequest) {
     const summary = (body.summary || "").trim();
     const experience = (body.experience || "").trim();
     const education = (body.education || "").trim();
+    const photoUrl = (body.photoUrl || "").trim();
+    const location = (body.location || "").trim();
+    const linkedinUrl = (body.linkedinUrl || "").trim();
+    const portfolioUrl = (body.portfolioUrl || "").trim();
+    const languages = (body.languages || "").trim();
+    const certifications = (body.certifications || "").trim();
+    const workModel = (body.workModel || "").trim();
 
     const rows = await sql`
       INSERT INTO resumes (
-        user_id, full_name, email, phone, target_role, seniority, skills, summary, experience, education, updated_at
+        user_id, full_name, email, phone, target_role, seniority, skills,
+        summary, experience, education, photo_url, location, linkedin_url,
+        portfolio_url, languages, certifications, work_model, updated_at
       )
       VALUES (
         ${user.userId}, ${fullName}, ${email}, ${phone}, ${targetRole}, ${seniority},
-        ${JSON.stringify(skills)}::jsonb, ${summary}, ${experience}, ${education}, NOW()
+        ${JSON.stringify(skills)}::jsonb, ${summary}, ${experience}, ${education},
+        ${photoUrl}, ${location}, ${linkedinUrl}, ${portfolioUrl},
+        ${languages}, ${certifications}, ${workModel}, NOW()
       )
       ON CONFLICT (user_id) DO UPDATE SET
         full_name = EXCLUDED.full_name,
@@ -69,6 +87,13 @@ export async function POST(req: NextRequest) {
         summary = EXCLUDED.summary,
         experience = EXCLUDED.experience,
         education = EXCLUDED.education,
+        photo_url = EXCLUDED.photo_url,
+        location = EXCLUDED.location,
+        linkedin_url = EXCLUDED.linkedin_url,
+        portfolio_url = EXCLUDED.portfolio_url,
+        languages = EXCLUDED.languages,
+        certifications = EXCLUDED.certifications,
+        work_model = EXCLUDED.work_model,
         updated_at = NOW()
       RETURNING *
     `;

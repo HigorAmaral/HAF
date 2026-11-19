@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bell,
+  Bookmark,
   Briefcase,
   CheckCircle2,
   Database,
@@ -23,7 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 import AuthGate from "@/components/AuthGate";
-import ResumeBuilder from "@/components/ResumeBuilder";
+import ResumeBuilder, { type DbResumeRow } from "@/components/ResumeBuilder";
 import {
   BRAZIL_STATES,
   matchesLocationFilter,
@@ -36,18 +37,6 @@ import type {
   SourceRecord,
   SourceType,
 } from "@/lib/scrapers/types";
-
-interface DbResumeRow {
-  full_name?: string;
-  email?: string;
-  phone?: string;
-  target_role?: string;
-  seniority?: string;
-  skills?: string[];
-  summary?: string;
-  experience?: string;
-  education?: string;
-}
 
 interface DashboardData {
   user: { id: number; name: string; email: string };
@@ -172,6 +161,9 @@ export default function HomePage() {
   const [testingAlert, setTestingAlert] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [jobStatusFilter, setJobStatusFilter] = useState<
+    "all" | "saved" | "applied" | "pending"
+  >("all");
 
   // Form nova fonte
   const [sourceName, setSourceName] = useState("");
@@ -391,6 +383,23 @@ export default function HomePage() {
     setFilterCities((prev) => prev.filter((c) => c !== cityName));
   };
 
+  const handleToggleJobFlag = async (
+    jobId: number,
+    patch: { saved?: boolean; applied?: boolean }
+  ) => {
+    await fetch(`/api/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    await fetchDashboard();
+  };
+
+  const handleDeleteJob = async (jobId: number) => {
+    await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
+    await fetchDashboard();
+  };
+
   const selectedStateObj = useMemo(
     () => BRAZIL_STATES.find((s) => s.uf === filterState) || null,
     [filterState]
@@ -431,7 +440,15 @@ export default function HomePage() {
         `${j.title} ${j.location || ""}`,
         locFilter
       );
-      return matchesSearch && matchesLoc;
+      const matchesStatus =
+        jobStatusFilter === "all"
+          ? true
+          : jobStatusFilter === "saved"
+            ? Boolean(j.saved)
+            : jobStatusFilter === "applied"
+              ? Boolean(j.applied)
+              : !j.applied;
+      return matchesSearch && matchesLoc && matchesStatus;
     });
 
     if (resumeTerms.length === 0) return list;
@@ -443,7 +460,7 @@ export default function HomePage() {
       const scoreB = resumeTerms.filter((t) => hayB.includes(t)).length;
       return scoreB - scoreA;
     });
-  }, [data?.jobs, search, filterState, filterCities, includeRemote, resumeTerms]);
+  }, [data?.jobs, search, filterState, filterCities, includeRemote, jobStatusFilter, resumeTerms]);
 
   if (authState === "checking") {
     return (
@@ -567,18 +584,72 @@ export default function HomePage() {
 
         {/* ABA 1: VAGAS */}
         {activeTab === "jobs" && (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  Vagas Encontradas ({filteredJobs.length})
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Resultados consolidados de todas as{" "}
-                  {data?.sources.filter((s) => s.enabled).length ?? 0} fontes
-                  ativas de uma vez só.
+          <div className="space-y-6">
+            {/* Métricas rápidas */}
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <p className="text-xs text-slate-400">Vagas capturadas</p>
+                <p className="mt-1 text-2xl font-bold text-slate-100">
+                  {data?.jobs.length ?? 0}
                 </p>
               </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <p className="text-xs text-slate-400">Favoritas</p>
+                <p className="mt-1 text-2xl font-bold text-amber-400">
+                  {data?.jobs.filter((j) => j.saved).length ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <p className="text-xs text-slate-400">Candidaturas</p>
+                <p className="mt-1 text-2xl font-bold text-emerald-400">
+                  {data?.jobs.filter((j) => j.applied).length ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <p className="text-xs text-slate-400">Fontes ativas</p>
+                <p className="mt-1 text-2xl font-bold text-indigo-400">
+                  {data?.sources.filter((s) => s.enabled).length ?? 0}
+                </p>
+              </div>
+            </div>
+
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">
+                    Vagas Encontradas ({filteredJobs.length})
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Ordenadas por compatibilidade com o seu currículo.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {(
+                    [
+                      ["all", "Todas"],
+                      ["saved", "Favoritas"],
+                      ["applied", "Candidatadas"],
+                      ["pending", "Não candidatadas"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setJobStatusFilter(key)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                        jobStatusFilter === key
+                          ? "bg-indigo-600 text-white"
+                          : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
 
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -768,21 +839,66 @@ export default function HomePage() {
                         </p>
                       </div>
 
-                      <a
-                        href={job.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
-                      >
-                        Abrir vaga
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleToggleJobFlag(job.id, { saved: !job.saved })
+                          }
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
+                            job.saved
+                              ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
+                              : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200"
+                          }`}
+                          title="Favoritar vaga"
+                        >
+                          <Bookmark className="h-3.5 w-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleToggleJobFlag(job.id, {
+                              applied: !job.applied,
+                            })
+                          }
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
+                            job.applied
+                              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                              : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200"
+                          }`}
+                          title="Marcar como candidatada"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {job.applied ? "Candidatado" : "Candidatar"}
+                        </button>
+
+                        <a
+                          href={job.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
+                        >
+                          Abrir vaga
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteJob(job.id)}
+                          className="rounded-lg border border-slate-800 p-2 text-slate-500 transition hover:text-rose-400"
+                          title="Remover vaga"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             )}
           </section>
+          </div>
         )}
 
         {/* ABA 2: MEU CURRÍCULO */}

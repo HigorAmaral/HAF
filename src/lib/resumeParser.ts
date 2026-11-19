@@ -10,6 +10,9 @@ export interface ParsedResume {
   summary: string;
   experience: string;
   education: string;
+  linkedinUrl: string;
+  portfolioUrl: string;
+  languages: string;
   rawText: string;
 }
 
@@ -139,6 +142,12 @@ export async function parseResumePdf(buffer: ArrayBuffer): Promise<ParsedResume>
   const phoneMatch = cleanText.match(
     /(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9?\d{4}[-.\s]?\d{4})/
   );
+  const linkedinMatch = cleanText.match(
+    /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+/i
+  );
+  const githubMatch = cleanText.match(
+    /(?:https?:\/\/)?(?:www\.)?github\.com\/[a-zA-Z0-9_-]+/i
+  );
 
   // Nome: primeira linha curta sem @, http ou dígitos em excesso
   let fullName = "";
@@ -222,6 +231,11 @@ export async function parseResumePdf(buffer: ArrayBuffer): Promise<ParsedResume>
     ["forma[cç][aã]o", "educa[cç][aã]o", "education"],
     allHeadings
   );
+  const languages = extractSection(
+    cleanText,
+    ["idiomas", "languages"],
+    allHeadings
+  );
 
   return {
     fullName,
@@ -233,6 +247,17 @@ export async function parseResumePdf(buffer: ArrayBuffer): Promise<ParsedResume>
     summary: summary || lines.slice(0, 6).join(" ").slice(0, 500),
     experience,
     education,
+    linkedinUrl: linkedinMatch
+      ? linkedinMatch[0].startsWith("http")
+        ? linkedinMatch[0]
+        : `https://${linkedinMatch[0]}`
+      : "",
+    portfolioUrl: githubMatch
+      ? githubMatch[0].startsWith("http")
+        ? githubMatch[0]
+        : `https://${githubMatch[0]}`
+      : "",
+    languages,
     rawText: cleanText.slice(0, 4000),
   };
 }

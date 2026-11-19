@@ -44,6 +44,8 @@ export interface JobRecord {
   url: string;
   published_at: string | null;
   notified: boolean;
+  saved?: boolean;
+  applied?: boolean;
   created_at: string;
 }
 

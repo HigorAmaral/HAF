@@ -45,9 +45,23 @@ export async function ensureSchema(): Promise<void> {
         summary TEXT NOT NULL DEFAULT '',
         experience TEXT NOT NULL DEFAULT '',
         education TEXT NOT NULL DEFAULT '',
+        photo_url TEXT NOT NULL DEFAULT '',
+        location TEXT NOT NULL DEFAULT '',
+        linkedin_url TEXT NOT NULL DEFAULT '',
+        portfolio_url TEXT NOT NULL DEFAULT '',
+        languages TEXT NOT NULL DEFAULT '',
+        certifications TEXT NOT NULL DEFAULT '',
+        work_model TEXT NOT NULL DEFAULT '',
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;
+    await sql`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS photo_url TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS linkedin_url TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS portfolio_url TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS languages TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS certifications TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS work_model TEXT NOT NULL DEFAULT ''`;
 
     await sql`
       CREATE TABLE IF NOT EXISTS sources (
@@ -90,10 +104,14 @@ export async function ensureSchema(): Promise<void> {
         url TEXT NOT NULL,
         published_at TEXT,
         notified BOOLEAN NOT NULL DEFAULT FALSE,
+        saved BOOLEAN NOT NULL DEFAULT FALSE,
+        applied BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;
     await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE`;
+    await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS saved BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS applied BOOLEAN NOT NULL DEFAULT FALSE`;
     await sql`ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_external_id_key`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS jobs_user_external_idx ON jobs (COALESCE(user_id, 0), external_id)`;
 

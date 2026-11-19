@@ -35,12 +35,12 @@ export async function sendTelegramAlert(
     const batch = jobs.slice(i, i + batchSize);
     const lines = batch.map(
       (job) =>
-        `💼 <b>${escapeHtml(job.title)}</b>\n🏢 ${escapeHtml(job.company)} • 📍 ${escapeHtml(job.location || "Não informado")}\n🔗 <a href="${job.url}">Abrir vaga</a> <i>(${escapeHtml(job.source_name)})</i>`
+        `• <b>${escapeHtml(job.title)}</b>\n${escapeHtml(job.company)} — ${escapeHtml(job.location || "Não informado")}\n<a href="${job.url}">Abrir vaga</a> (${escapeHtml(job.source_name)})`
     );
 
     const header =
       i === 0
-        ? `🚀 <b>HAF — ${jobs.length} nova(s) vaga(s) encontrada(s)!</b>\n\n`
+        ? `<b>HAF — ${jobs.length} nova(s) vaga(s) encontrada(s)</b>\n\n`
         : "";
     const text = `${header}${lines.join("\n\n")}`;
 
@@ -85,23 +85,25 @@ export async function sendEmailAlert(
   const resend = new Resend(apiKey);
   const itemsHtml = jobs
     .map(
-      (job) => `
+      (job, idx) => `
       <tr>
-        <td style="padding:0 0 14px 0;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0f172a;border:1px solid #1e293b;border-radius:12px;">
+        <td style="padding:18px 0;${idx < jobs.length - 1 ? "border-bottom:1px solid #e5e7eb;" : ""}">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
             <tr>
-              <td style="padding:18px 20px;">
-                <span style="display:inline-block;background-color:#312e81;color:#c7d2fe;font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:0.4px;">
+              <td style="vertical-align:top;">
+                <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">
                   ${escapeHtml(job.source_name)}
-                </span>
-                <div style="margin:10px 0 6px 0;font-size:17px;font-weight:700;color:#f8fafc;line-height:1.35;">
+                </div>
+                <a href="${escapeHtml(job.url)}" target="_blank" style="font-size:15px;font-weight:600;color:#111827;text-decoration:none;line-height:1.4;display:inline-block;">
                   ${escapeHtml(job.title)}
+                </a>
+                <div style="font-size:13px;color:#4b5563;margin-top:4px;">
+                  ${escapeHtml(job.company)} &middot; ${escapeHtml(job.location || "Local não informado")}
                 </div>
-                <div style="font-size:13px;color:#94a3b8;margin-bottom:14px;">
-                  🏢 ${escapeHtml(job.company)} &nbsp;•&nbsp; 📍 ${escapeHtml(job.location || "Não informado")}
-                </div>
-                <a href="${escapeHtml(job.url)}" target="_blank" style="display:inline-block;background-color:#4f46e5;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:9px 16px;border-radius:8px;">
-                  Ver vaga →
+              </td>
+              <td style="vertical-align:middle;text-align:right;padding-left:16px;white-space:nowrap;">
+                <a href="${escapeHtml(job.url)}" target="_blank" style="display:inline-block;background-color:#111827;color:#ffffff;font-size:12px;font-weight:500;text-decoration:none;padding:8px 14px;border-radius:6px;">
+                  Ver vaga
                 </a>
               </td>
             </tr>
@@ -114,35 +116,35 @@ export async function sendEmailAlert(
   const html = `
   <!DOCTYPE html>
   <html lang="pt-BR">
-    <body style="margin:0;padding:0;background-color:#020617;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:28px 12px;">
+    <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f4f5;padding:32px 16px;">
         <tr>
           <td align="center">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background-color:#090d16;border:1px solid #1e293b;border-radius:16px;overflow:hidden;">
-              <!-- Header -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:8px;">
               <tr>
-                <td style="background:linear-gradient(135deg,#4f46e5,#0ea5e9);padding:26px 24px;">
-                  <div style="font-size:12px;font-weight:700;color:#e0e7ff;letter-spacing:1.2px;text-transform:uppercase;">
-                    HAF • Monitor de Vagas
+                <td style="padding:24px 28px 18px 28px;border-bottom:1px solid #e4e4e7;">
+                  <div style="font-size:12px;font-weight:700;color:#111827;letter-spacing:0.8px;text-transform:uppercase;">
+                    HAF
                   </div>
-                  <h1 style="margin:6px 0 0 0;font-size:22px;font-weight:800;color:#ffffff;">
-                    🚀 ${jobs.length} nova(s) vaga(s) encontrada(s)!
+                  <h1 style="margin:8px 0 4px 0;font-size:20px;font-weight:700;color:#111827;line-height:1.3;">
+                    ${jobs.length} nova(s) vaga(s) para o seu perfil
                   </h1>
+                  <p style="margin:0;font-size:13px;color:#6b7280;">
+                    Selecionadas automaticamente com base no seu currículo e filtros.
+                  </p>
                 </td>
               </tr>
-              <!-- Body -->
               <tr>
-                <td style="padding:22px 24px 10px 24px;">
+                <td style="padding:4px 28px 8px 28px;">
                   <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                     ${itemsHtml}
                   </table>
                 </td>
               </tr>
-              <!-- Footer -->
               <tr>
-                <td style="padding:16px 24px 24px 24px;border-top:1px solid #1e293b;text-align:center;">
-                  <p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;">
-                    Enviado automaticamente pelo <strong>HAF</strong> conforme seu currículo, palavras-chave e filtros de localização.
+                <td style="padding:18px 28px;background-color:#fafafa;border-top:1px solid #e4e4e7;border-radius:0 0 8px 8px;">
+                  <p style="margin:0;font-size:12px;color:#71717a;line-height:1.5;">
+                    Você recebeu este resumo porque cadastrou seu e-mail no HAF Monitor de Vagas.
                   </p>
                 </td>
               </tr>
@@ -156,7 +158,7 @@ export async function sendEmailAlert(
   const { error } = await resend.emails.send({
     from,
     to: to.split(",").map((e) => e.trim()),
-    subject: `🚀 ${jobs.length} nova(s) vaga(s) encontrada(s) — HAF`,
+    subject: `HAF: ${jobs.length} nova(s) vaga(s) encontrada(s)`,
     html,
   });
 
@@ -187,34 +189,34 @@ export async function sendPasswordResetEmail(
   const html = `
   <!DOCTYPE html>
   <html lang="pt-BR">
-    <body style="margin:0;padding:0;background-color:#020617;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:28px 12px;">
+    <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f4f5;padding:32px 16px;">
         <tr>
           <td align="center">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background-color:#0f172a;border:1px solid #1e293b;border-radius:16px;overflow:hidden;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background-color:#ffffff;border:1px solid #e4e4e7;border-radius:8px;">
               <tr>
-                <td style="background:linear-gradient(135deg,#4f46e5,#6366f1);padding:24px;">
-                  <div style="font-size:12px;font-weight:700;color:#e0e7ff;letter-spacing:1px;text-transform:uppercase;">
-                    HAF • Segurança da Conta
+                <td style="padding:24px 28px 16px 28px;border-bottom:1px solid #e4e4e7;">
+                  <div style="font-size:12px;font-weight:700;color:#111827;letter-spacing:0.8px;text-transform:uppercase;">
+                    HAF
                   </div>
-                  <h1 style="margin:6px 0 0 0;font-size:20px;font-weight:800;color:#ffffff;">
-                    Recuperação de Senha
+                  <h1 style="margin:8px 0 0 0;font-size:19px;font-weight:700;color:#111827;">
+                    Redefinição de senha
                   </h1>
                 </td>
               </tr>
               <tr>
-                <td style="padding:24px;color:#cbd5e1;font-size:14px;line-height:1.6;">
-                  <p style="margin:0 0 12px 0;">Olá, <strong>${escapeHtml(userName)}</strong>!</p>
+                <td style="padding:24px 28px;font-size:14px;color:#374151;line-height:1.6;">
+                  <p style="margin:0 0 12px 0;">Olá, ${escapeHtml(userName)}.</p>
                   <p style="margin:0 0 20px 0;">
-                    Recebemos uma solicitação para redefinir a senha da sua conta no <strong>HAF</strong>. Clique no botão abaixo para criar uma nova senha (o link expira em 1 hora):
+                    Recebemos um pedido para alterar a senha da sua conta. Use o botão abaixo para definir uma nova senha (válido por 1 hora):
                   </p>
-                  <p style="margin:0 0 20px 0;text-align:center;">
-                    <a href="${escapeHtml(resetUrl)}" target="_blank" style="display:inline-block;background-color:#4f46e5;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;padding:12px 24px;border-radius:10px;">
-                      Redefinir Minha Senha
+                  <p style="margin:0 0 20px 0;">
+                    <a href="${escapeHtml(resetUrl)}" target="_blank" style="display:inline-block;background-color:#111827;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:6px;">
+                      Redefinir senha
                     </a>
                   </p>
-                  <p style="margin:0;font-size:12px;color:#64748b;">
-                    Se você não solicitou essa alteração, ignore este e-mail com segurança.
+                  <p style="margin:0;font-size:12px;color:#6b7280;">
+                    Se você não fez essa solicitação, pode ignorar este e-mail.
                   </p>
                 </td>
               </tr>
@@ -228,7 +230,7 @@ export async function sendPasswordResetEmail(
   const { error } = await resend.emails.send({
     from,
     to: [toEmail],
-    subject: "🔐 Recuperação de Senha — HAF Monitor de Vagas",
+    subject: "HAF: Redefinição de senha",
     html,
   });
 
