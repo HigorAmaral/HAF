@@ -31,6 +31,10 @@ interface DashboardData {
   sources: SourceRecord[];
   keywords: KeywordRecord[];
   runs: ScrapeRunRecord[];
+  settings: {
+    alertEmail: string;
+    telegramChatId: string;
+  };
   integrations: {
     database: boolean;
     telegram: boolean;
@@ -135,13 +139,21 @@ export default function HomePage() {
   // Form nova keyword
   const [newKeyword, setNewKeyword] = useState("");
 
+  // Form configurações de alerta
+  const [alertEmail, setAlertEmail] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+
   const fetchDashboard = useCallback(async () => {
     try {
       setError(null);
       const res = await fetch("/api/dashboard", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Falha ao carregar dados");
-      setData(json as DashboardData);
+      const parsed = json as DashboardData;
+      setData(parsed);
+      setAlertEmail(parsed.settings?.alertEmail || "");
+      setTelegramChatId(parsed.settings?.telegramChatId || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
     } finally {
@@ -249,6 +261,26 @@ export default function HomePage() {
   const handleDeleteKeyword = async (id: number) => {
     await fetch(`/api/keywords/${id}`, { method: "DELETE" });
     await fetchDashboard();
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alertEmail, telegramChatId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao salvar alertas");
+      showToast("Configurações de alerta salvas!");
+      await fetchDashboard();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Erro ao salvar");
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   const filteredJobs = useMemo(() => {
@@ -377,8 +409,49 @@ export default function HomePage() {
         </section>
 
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* Coluna Esquerda: Fontes e Filtros */}
+          {/* Coluna Esquerda: Alertas, Fontes e Filtros */}
           <div className="space-y-6 lg:col-span-4">
+            {/* Destino dos Alertas */}
+            <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Bell className="h-4 w-4 text-amber-400" />
+                <h2 className="font-semibold">Receber Alertas</h2>
+              </div>
+              <form onSubmit={handleSaveSettings} className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">
+                    E-mail para receber vagas
+                  </label>
+                  <input
+                    type="email"
+                    value={alertEmail}
+                    onChange={(e) => setAlertEmail(e.target.value)}
+                    placeholder="seu-email@exemplo.com"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">
+                    Telegram Chat ID (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder="Ex: 123456789"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="w-full rounded-lg bg-amber-600 py-2 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50"
+                >
+                  {savingSettings ? "Salvando..." : "Salvar Destino dos Alertas"}
+                </button>
+              </form>
+            </section>
+
             {/* Palavras-chave */}
             <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <div className="mb-3 flex items-center gap-2">

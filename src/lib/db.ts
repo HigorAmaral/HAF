@@ -71,6 +71,14 @@ export async function ensureSchema(): Promise<void> {
       )
     `;
 
+    await sql`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+
     // Seed inicial de fontes públicas caso a tabela esteja vazia
     const existing = await sql`SELECT COUNT(*)::int AS count FROM sources`;
     if (existing[0]?.count === 0) {
@@ -94,4 +102,22 @@ export async function ensureSchema(): Promise<void> {
   });
 
   return schemaPromise;
+}
+
+export async function getAlertSettings(): Promise<{
+  alertEmail: string;
+  telegramChatId: string;
+}> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT key, value FROM settings WHERE key IN ('alert_email', 'telegram_chat_id')
+  `) as Array<{ key: string; value: string }>;
+
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+  return {
+    alertEmail: map.get("alert_email") || process.env.ALERT_EMAIL_TO || "",
+    telegramChatId:
+      map.get("telegram_chat_id") || process.env.TELEGRAM_CHAT_ID || "",
+  };
 }

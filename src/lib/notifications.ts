@@ -14,15 +14,18 @@ export interface NotificationResult {
 }
 
 export async function sendTelegramAlert(
-  jobs: JobRecord[]
+  jobs: JobRecord[],
+  chatIdOverride?: string
 ): Promise<{ sent: boolean; reason?: string }> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const chatId = chatIdOverride?.trim() || process.env.TELEGRAM_CHAT_ID;
 
   if (!token || !chatId) {
     return {
       sent: false,
-      reason: "TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não configurados",
+      reason: !token
+        ? "TELEGRAM_BOT_TOKEN não configurado na Vercel"
+        : "Informe seu Telegram Chat ID no painel",
     };
   }
 
@@ -62,17 +65,20 @@ export async function sendTelegramAlert(
 }
 
 export async function sendEmailAlert(
-  jobs: JobRecord[]
+  jobs: JobRecord[],
+  emailToOverride?: string
 ): Promise<{ sent: boolean; reason?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.ALERT_EMAIL_TO;
+  const to = emailToOverride?.trim() || process.env.ALERT_EMAIL_TO;
   const from =
     process.env.ALERT_EMAIL_FROM || "HAF Monitor <onboarding@resend.dev>";
 
   if (!apiKey || !to) {
     return {
       sent: false,
-      reason: "RESEND_API_KEY ou ALERT_EMAIL_TO não configurados",
+      reason: !apiKey
+        ? "RESEND_API_KEY não configurada na Vercel"
+        : "Informe o e-mail de destino no painel",
     };
   }
 
@@ -113,7 +119,8 @@ export async function sendEmailAlert(
 }
 
 export async function notifyNewJobs(
-  jobs: JobRecord[]
+  jobs: JobRecord[],
+  overrides?: { alertEmail?: string; telegramChatId?: string }
 ): Promise<NotificationResult> {
   if (jobs.length === 0) {
     return {
@@ -123,8 +130,8 @@ export async function notifyNewJobs(
   }
 
   const [tgRes, emailRes] = await Promise.allSettled([
-    sendTelegramAlert(jobs),
-    sendEmailAlert(jobs),
+    sendTelegramAlert(jobs, overrides?.telegramChatId),
+    sendEmailAlert(jobs, overrides?.alertEmail),
   ]);
 
   return {

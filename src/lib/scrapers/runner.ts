@@ -1,4 +1,4 @@
-import { ensureSchema, getSql } from "../db";
+import { ensureSchema, getAlertSettings, getSql } from "../db";
 import { notifyNewJobs, type NotificationResult } from "../notifications";
 import { runSourceConnector } from "./connectors";
 import type { JobRecord, KeywordRecord, SourceRecord } from "./types";
@@ -104,7 +104,8 @@ export async function runJobMonitor(): Promise<RunMonitorResult> {
       }
     }
 
-    const notifications = await notifyNewJobs(insertedJobs);
+    const alertSettings = await getAlertSettings();
+    const notifications = await notifyNewJobs(insertedJobs, alertSettings);
 
     if (
       insertedJobs.length > 0 &&

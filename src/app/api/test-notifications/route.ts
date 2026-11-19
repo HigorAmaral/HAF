@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAlertSettings } from "@/lib/db";
 import { notifyNewJobs } from "@/lib/notifications";
 import type { JobRecord } from "@/lib/scrapers/types";
 
@@ -9,7 +10,7 @@ export async function POST() {
     source_id: null,
     source_name: "Teste do Sistema",
     title: "Desenvolvedor(a) Full Stack (Teste de Alerta)",
-    company: "Monitor de Vagas",
+    company: "HAF Monitor",
     location: "Remoto",
     url: "https://vercel.com",
     published_at: new Date().toISOString(),
@@ -17,6 +18,7 @@ export async function POST() {
     created_at: new Date().toISOString(),
   };
 
-  const result = await notifyNewJobs([sampleJob]);
+  const settings = await getAlertSettings();
+  const result = await notifyNewJobs([sampleJob], settings);
   return NextResponse.json(result);
 }
