@@ -1,4 +1,10 @@
-import { ensureSchema, getAlertSettings, getSql } from "../db";
+import { matchesLocationFilter } from "../brazilLocations";
+import {
+  ensureSchema,
+  getAlertSettings,
+  getLocationFilter,
+  getSql,
+} from "../db";
 import { notifyNewJobs, type NotificationResult } from "../notifications";
 import { runSourceConnector } from "./connectors";
 import type { JobRecord, KeywordRecord, SourceRecord } from "./types";
@@ -35,6 +41,8 @@ export async function runJobMonitorForUser(
     const keywords = (await sql`
       SELECT * FROM keywords WHERE user_id = ${userId} ORDER BY id ASC
     `) as KeywordRecord[];
+
+    const locationFilter = await getLocationFilter(userId);
 
     const normalizedTerms = keywords
       .map((k) => k.term.trim().toLowerCase())
@@ -78,13 +86,17 @@ export async function runJobMonitorForUser(
       }
 
       const { source, scraped } = res.value;
-      const filtered =
-        normalizedTerms.length === 0
-          ? scraped
-          : scraped.filter((job) => {
-              const haystack = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
-              return normalizedTerms.some((term) => haystack.includes(term));
-            });
+      const filtered = scraped.filter((job) => {
+        const haystack = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
+        const matchesKeyword =
+          normalizedTerms.length === 0 ||
+          normalizedTerms.some((term) => haystack.includes(term));
+        const matchesLoc = matchesLocationFilter(
+          `${job.title} ${job.location || ""}`,
+          locationFilter
+        );
+        return matchesKeyword && matchesLoc;
+      });
 
       totalFound += filtered.length;
 

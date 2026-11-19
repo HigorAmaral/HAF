@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import {
   ensureSchema,
   getAlertSettings,
+  getLocationFilter,
   getSql,
   seedDefaultSourcesForUser,
 } from "@/lib/db";
@@ -18,13 +19,14 @@ export async function GET() {
     await seedDefaultSourcesForUser(user.userId);
     const sql = getSql();
 
-    const [jobs, sources, keywords, runs, settings, resumeRows] =
+    const [jobs, sources, keywords, runs, settings, locationFilter, resumeRows] =
       await Promise.all([
         sql`SELECT * FROM jobs WHERE user_id = ${user.userId} ORDER BY created_at DESC LIMIT 120`,
         sql`SELECT * FROM sources WHERE user_id = ${user.userId} ORDER BY id ASC`,
         sql`SELECT * FROM keywords WHERE user_id = ${user.userId} ORDER BY id ASC`,
         sql`SELECT * FROM scrape_runs WHERE user_id = ${user.userId} ORDER BY started_at DESC LIMIT 10`,
         getAlertSettings(user.userId),
+        getLocationFilter(user.userId),
         sql`SELECT * FROM resumes WHERE user_id = ${user.userId} LIMIT 1`,
       ]);
 
@@ -35,6 +37,7 @@ export async function GET() {
       keywords,
       runs,
       settings,
+      locationFilter,
       resume: resumeRows[0] || null,
       integrations: {
         database: Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL),

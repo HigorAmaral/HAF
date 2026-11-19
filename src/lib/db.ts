@@ -173,3 +173,34 @@ export async function getAlertSettings(userId?: number): Promise<{
     telegramChatId: map.get("telegram_chat_id") || "",
   };
 }
+
+export async function getLocationFilter(userId: number): Promise<{
+  state: string;
+  cities: string[];
+  includeRemote: boolean;
+}> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT key, value FROM user_settings
+    WHERE user_id = ${userId}
+      AND key IN ('filter_state', 'filter_cities', 'include_remote')
+  `) as Array<{ key: string; value: string }>;
+
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+  let cities: string[] = [];
+  try {
+    const parsed = JSON.parse(map.get("filter_cities") || "[]");
+    if (Array.isArray(parsed)) {
+      cities = parsed.map((c) => String(c).trim()).filter(Boolean).slice(0, 5);
+    }
+  } catch {
+    cities = [];
+  }
+
+  return {
+    state: map.get("filter_state") || "",
+    cities,
+    includeRemote: map.get("include_remote") !== "false",
+  };
+}

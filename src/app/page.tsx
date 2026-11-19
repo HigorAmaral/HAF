@@ -12,6 +12,7 @@ import {
   Globe,
   LogOut,
   Mail,
+  MapPin,
   Play,
   Plus,
   RefreshCw,
@@ -23,6 +24,11 @@ import {
 } from "lucide-react";
 import AuthGate from "@/components/AuthGate";
 import ResumeBuilder from "@/components/ResumeBuilder";
+import {
+  BRAZIL_STATES,
+  matchesLocationFilter,
+  type LocationFilter,
+} from "@/lib/brazilLocations";
 import type {
   JobRecord,
   KeywordRecord,
@@ -53,6 +59,7 @@ interface DashboardData {
     alertEmail: string;
     telegramChatId: string;
   };
+  locationFilter: LocationFilter;
   resume: DbResumeRow | null;
   integrations: {
     database: boolean;
@@ -168,6 +175,13 @@ export default function HomePage() {
   const [telegramChatId, setTelegramChatId] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Filtro por Estado e até 5 Cidades
+  const [filterState, setFilterState] = useState("");
+  const [filterCities, setFilterCities] = useState<string[]>([]);
+  const [includeRemote, setIncludeRemote] = useState(true);
+  const [cityInput, setCityInput] = useState("");
+  const [savingLocation, setSavingLocation] = useState(false);
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 6500);
@@ -188,6 +202,9 @@ export default function HomePage() {
       setData(parsed);
       setAlertEmail(parsed.settings?.alertEmail || "");
       setTelegramChatId(parsed.settings?.telegramChatId || "");
+      setFilterState(parsed.locationFilter?.state || "");
+      setFilterCities(parsed.locationFilter?.cities || []);
+      setIncludeRemote(parsed.locationFilter?.includeRemote ?? true);
       setAuthState("authenticated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
@@ -318,6 +335,55 @@ export default function HomePage() {
     }
   };
 
+  const handleSaveLocationFilter = async (
+    nextState = filterState,
+    nextCities = filterCities,
+    nextRemote = includeRemote
+  ) => {
+    setSavingLocation(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filterState: nextState,
+          filterCities: nextCities,
+          includeRemote: nextRemote,
+        }),
+      });
+      if (!res.ok) throw new Error("Erro ao salvar filtro de localização");
+      showToast("Filtro de estado e cidades salvo no monitor!");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Erro ao salvar filtro");
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  const handleAddCity = (cityName: string) => {
+    const clean = cityName.trim();
+    if (!clean) return;
+    if (filterCities.length >= 5) {
+      showToast("Você pode selecionar no máximo 5 cidades.");
+      return;
+    }
+    if (filterCities.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+      setCityInput("");
+      return;
+    }
+    setFilterCities((prev) => [...prev, clean]);
+    setCityInput("");
+  };
+
+  const handleRemoveCity = (cityName: string) => {
+    setFilterCities((prev) => prev.filter((c) => c !== cityName));
+  };
+
+  const selectedStateObj = useMemo(
+    () => BRAZIL_STATES.find((s) => s.uf === filterState) || null,
+    [filterState]
+  );
+
   const resumeTerms = useMemo(() => {
     const terms: string[] = [];
     if (data?.resume?.skills && Array.isArray(data.resume.skills)) {
@@ -337,13 +403,25 @@ export default function HomePage() {
   const filteredJobs = useMemo(() => {
     if (!data?.jobs) return [];
     const q = search.trim().toLowerCase();
-    if (!q) return data.jobs;
-    return data.jobs.filter((j) =>
-      `${j.title} ${j.company} ${j.location || ""} ${j.source_name}`
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [data?.jobs, search]);
+    const locFilter: LocationFilter = {
+      state: filterState,
+      cities: filterCities,
+      includeRemote,
+    };
+
+    return data.jobs.filter((j) => {
+      const matchesSearch =
+        !q ||
+        `${j.title} ${j.company} ${j.location || ""} ${j.source_name}`
+          .toLowerCase()
+          .includes(q);
+      const matchesLoc = matchesLocationFilter(
+        `${j.title} ${j.location || ""}`,
+        locFilter
+      );
+      return matchesSearch && matchesLoc;
+    });
+  }, [data?.jobs, search, filterState, filterCities, includeRemote]);
 
   if (authState === "checking") {
     return (
@@ -490,6 +568,129 @@ export default function HomePage() {
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500"
                 />
               </div>
+            </div>
+
+            {/* Filtro por Estado e até 5 Cidades */}
+            <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+                  <MapPin className="h-4 w-4 text-emerald-400" />
+                  <span>Filtrar por Estado e Cidades (até 5)</span>
+                  <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
+                    {filterCities.length}/5 cidades
+                  </span>
+                </div>
+
+                <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={includeRemote}
+                    onChange={(e) => setIncludeRemote(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 accent-indigo-600"
+                  />
+                  Incluir vagas remotas
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-12">
+                <div className="sm:col-span-4">
+                  <select
+                    value={filterState}
+                    onChange={(e) => setFilterState(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Todos os estados (Brasil / Global)</option>
+                    {BRAZIL_STATES.map((st) => (
+                      <option key={st.uf} value={st.uf}>
+                        {st.name} ({st.uf})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-2 sm:col-span-5">
+                  <input
+                    type="text"
+                    list="brazil-cities-list"
+                    value={cityInput}
+                    disabled={filterCities.length >= 5}
+                    onChange={(e) => setCityInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCity(cityInput);
+                      }
+                    }}
+                    placeholder={
+                      filterCities.length >= 5
+                        ? "Limite de 5 cidades atingido"
+                        : "Digite ou escolha uma cidade..."
+                    }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-indigo-500 disabled:opacity-50"
+                  />
+                  <datalist id="brazil-cities-list">
+                    {(selectedStateObj
+                      ? selectedStateObj.cities
+                      : BRAZIL_STATES.flatMap((s) => s.cities)
+                    ).map((city) => (
+                      <option key={city} value={city} />
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    disabled={filterCities.length >= 5 || !cityInput.trim()}
+                    onClick={() => handleAddCity(cityInput)}
+                    className="shrink-0 rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+
+                <div className="flex gap-2 sm:col-span-3">
+                  <button
+                    type="button"
+                    disabled={savingLocation}
+                    onClick={() => handleSaveLocationFilter()}
+                    className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {savingLocation ? "Salvando..." : "Salvar no Monitor"}
+                  </button>
+                  {(filterState || filterCities.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterState("");
+                        setFilterCities([]);
+                        handleSaveLocationFilter("", [], includeRemote);
+                      }}
+                      className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-xs text-slate-400 hover:text-rose-300"
+                      title="Limpar filtro"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {filterCities.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {filterCities.map((city) => (
+                    <span
+                      key={city}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300"
+                    >
+                      {city}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCity(city)}
+                        className="text-emerald-400 hover:text-rose-400"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {filteredJobs.length === 0 ? (
