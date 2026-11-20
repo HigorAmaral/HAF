@@ -810,69 +810,363 @@ export default function HomePage() {
 
       {/* Conteúdo Principal com margem esquerda para a barra fixa no desktop */}
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:ml-72 lg:px-8 lg:py-8">
+        {/* Cabeçalho Contextual da Página */}
+        <div className="gupy-card flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-bold tracking-tight">
+                {activeTab === "jobs"
+                  ? "Portal de Vagas"
+                  : activeTab === "applications"
+                    ? "Minhas Candidaturas"
+                    : activeTab === "resume"
+                      ? "Meu Currículo & Perfil"
+                      : "Alertas, Filtros & Fontes"}
+              </h2>
+              {data?.resume?.target_role && (
+                <span className="gupy-badge px-2.5 py-0.5 text-xs">
+                  Foco: {data.resume.target_role}
+                </span>
+              )}
+              <span className="gupy-badge px-2.5 py-0.5 text-xs">
+                {onlyBrazil ? "Brasil" : "Global"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              {activeTab === "jobs"
+                ? "Explore vagas de todas as fontes ordenadas pela compatibilidade com seu currículo."
+                : activeTab === "applications"
+                  ? "Gerencie o funil dos seus processos seletivos e registre anotações."
+                  : activeTab === "resume"
+                    ? "Importe seu PDF ou edite seus dados para calibrar a busca automática e exportar seu currículo."
+                    : "Configure notificações por E-mail/Telegram e gerencie as fontes varridas."}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {activeTab !== "resume" && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("resume")}
+                className="gupy-btn-secondary inline-flex items-center gap-1.5 px-3.5 py-2 text-xs"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>Editar Currículo</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleRunScrape}
+              disabled={running}
+              className="gupy-btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs disabled:opacity-50"
+            >
+              {running ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {running ? "Varrendo fontes..." : "Atualizar Vagas"}
+              </span>
+            </button>
+          </div>
+        </div>
+
         {toast && (
-          <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/70 px-4 py-3 text-sm text-indigo-100">
+          <div className="gupy-card px-4 py-3 text-sm font-medium">
             {toast}
           </div>
         )}
 
         {error && (
-          <div className="rounded-xl border border-rose-500/40 bg-rose-950/60 p-4 text-sm text-rose-200">
+          <div className="gupy-card p-4 text-sm">
             <strong>Atenção:</strong> {error}
           </div>
         )}
 
         {/* ABA 1: VAGAS */}
         {activeTab === "jobs" && (
-          <div className="space-y-6">
-            {/* Métricas rápidas */}
-            <div className="grid gap-4 sm:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                  Vagas capturadas
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-slate-100">
-                  {data?.jobs.length ?? 0}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-amber-500/20 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
-                <p className="text-xs font-medium uppercase tracking-wider text-amber-300/80">
-                  Favoritas
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-amber-400">
-                  {data?.jobs.filter((j) => j.saved).length ?? 0}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
-                <p className="text-xs font-medium uppercase tracking-wider text-emerald-300/80">
-                  Candidaturas
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-400">
-                  {data?.jobs.filter((j) => j.applied).length ?? 0}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-indigo-500/20 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
-                <p className="text-xs font-medium uppercase tracking-wider text-indigo-300/80">
-                  Fontes ativas
-                </p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-indigo-400">
-                  {data?.sources.filter((s) => s.enabled).length ?? 0}
-                </p>
-              </div>
-            </div>
-
-            <section className="rounded-2xl border border-white/10 bg-slate-900/55 p-6 shadow-xl shadow-black/30 backdrop-blur">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-5">
+            {/* Métricas rápidas clicáveis */}
+            <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => setJobStatusFilter("all")}
+                className="gupy-card flex items-center justify-between p-4 text-left transition hover:border-slate-500"
+              >
                 <div>
-                  <h2 className="text-lg font-semibold">
-                    Vagas Encontradas ({filteredJobs.length})
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Ordenadas por compatibilidade com o seu currículo.
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Vagas Capturadas
+                  </p>
+                  <p className="mt-1.5 text-2xl font-bold tracking-tight">
+                    {data?.jobs.length ?? 0}
                   </p>
                 </div>
+                <div className="gupy-subcard flex h-10 w-10 items-center justify-center">
+                  <Briefcase className="h-4 w-4" />
+                </div>
+              </button>
 
-                <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setJobStatusFilter("saved")}
+                className="gupy-card flex items-center justify-between p-4 text-left transition hover:border-slate-500"
+              >
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Favoritas
+                  </p>
+                  <p className="mt-1.5 text-2xl font-bold tracking-tight">
+                    {data?.jobs.filter((j) => j.saved).length ?? 0}
+                  </p>
+                </div>
+                <div className="gupy-subcard flex h-10 w-10 items-center justify-center">
+                  <Bookmark className="h-4 w-4" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("applications")}
+                className="gupy-card flex items-center justify-between p-4 text-left transition hover:border-slate-500"
+              >
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Candidaturas
+                  </p>
+                  <p className="mt-1.5 text-2xl font-bold tracking-tight">
+                    {data?.jobs.filter((j) => j.applied).length ?? 0}
+                  </p>
+                </div>
+                <div className="gupy-subcard flex h-10 w-10 items-center justify-center">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("settings")}
+                className="gupy-card flex items-center justify-between p-4 text-left transition hover:border-slate-500"
+              >
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Fontes Ativas
+                  </p>
+                  <p className="mt-1.5 text-2xl font-bold tracking-tight">
+                    {data?.sources.filter((s) => s.enabled).length ?? 0}
+                  </p>
+                </div>
+                <div className="gupy-subcard flex h-10 w-10 items-center justify-center">
+                  <Globe className="h-4 w-4" />
+                </div>
+              </button>
+            </div>
+
+            {/* Painel Unificado de Busca e Filtros */}
+            <section className="gupy-card space-y-4 p-5">
+              {/* Linha 1: Busca principal + Senioridade + Ordenação */}
+              <div className="grid gap-3 sm:grid-cols-12">
+                <div className="relative sm:col-span-6">
+                  <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar por cargo, tecnologia, empresa ou fonte..."
+                    className="w-full py-2 pl-10 pr-3 text-sm outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-3">
+                  <select
+                    value={seniorityFilter}
+                    onChange={(e) =>
+                      setSeniorityFilter(e.target.value as SeniorityFilter)
+                    }
+                    className="w-full px-3 py-2 text-xs outline-none"
+                  >
+                    <option value="all">Nível: Todos</option>
+                    <option value="estagio">Estágio / Trainee</option>
+                    <option value="junior">Júnior</option>
+                    <option value="pleno">Pleno</option>
+                    <option value="senior">Sênior / Especialista</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-3">
+                  <select
+                    value={sortBy}
+                    onChange={(e) =>
+                      setSortBy(e.target.value as "match" | "recent")
+                    }
+                    className="w-full px-3 py-2 text-xs outline-none"
+                  >
+                    <option value="match">Ordenar: Maior Match</option>
+                    <option value="recent">Ordenar: Mais Recentes</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Linha 2: Localização (Estado, até 5 Cidades) & Modelo de Trabalho */}
+              <div className="gupy-subcard space-y-3 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold">
+                    <MapPin className="h-4 w-4" />
+                    <span>Localização &amp; Modelo de Trabalho</span>
+                    <span className="gupy-badge px-2 py-0.5 text-[11px]">
+                      {filterCities.length}/5 cidades
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(
+                      [
+                        ["all", "Todos"],
+                        ["remote", "Remoto"],
+                        ["hybrid", "Híbrido"],
+                        ["onsite", "Presencial"],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setWorkMode(mode)}
+                        className={`px-2.5 py-1 text-xs transition ${
+                          workMode === mode
+                            ? "gupy-btn-primary"
+                            : "gupy-btn-secondary"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+
+                    <label className="ml-2 inline-flex cursor-pointer items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={onlyBrazil}
+                        onChange={(e) => setOnlyBrazil(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded"
+                      />
+                      Apenas Brasil
+                    </label>
+
+                    <label className="ml-1 inline-flex cursor-pointer items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={includeRemote}
+                        onChange={(e) => setIncludeRemote(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded"
+                      />
+                      Incluir remotas
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid gap-2.5 sm:grid-cols-12">
+                  <div className="sm:col-span-4">
+                    <select
+                      value={filterState}
+                      onChange={(e) => setFilterState(e.target.value)}
+                      className="w-full px-3 py-2 text-xs outline-none"
+                    >
+                      <option value="">Todos os estados (Brasil / Global)</option>
+                      {BRAZIL_STATES.map((st) => (
+                        <option key={st.uf} value={st.uf}>
+                          {st.name} ({st.uf})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2 sm:col-span-5">
+                    <input
+                      type="text"
+                      list="brazil-cities-list"
+                      value={cityInput}
+                      disabled={filterCities.length >= 5}
+                      onChange={(e) => setCityInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddCity(cityInput);
+                        }
+                      }}
+                      placeholder={
+                        filterCities.length >= 5
+                          ? "Limite de 5 cidades atingido"
+                          : "Adicionar cidade (até 5)..."
+                      }
+                      className="w-full px-3 py-2 text-xs outline-none disabled:opacity-50"
+                    />
+                    <datalist id="brazil-cities-list">
+                      {(selectedStateObj
+                        ? selectedStateObj.cities
+                        : BRAZIL_STATES.flatMap((s) => s.cities)
+                      ).map((city) => (
+                        <option key={city} value={city} />
+                      ))}
+                    </datalist>
+                    <button
+                      type="button"
+                      disabled={filterCities.length >= 5 || !cityInput.trim()}
+                      onClick={() => handleAddCity(cityInput)}
+                      className="gupy-btn-secondary shrink-0 px-3 py-2 text-xs disabled:opacity-40"
+                    >
+                      + Cidade
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2 sm:col-span-3">
+                    <button
+                      type="button"
+                      disabled={savingLocation}
+                      onClick={() => handleSaveLocationFilter()}
+                      className="gupy-btn-primary w-full px-3 py-2 text-xs disabled:opacity-50"
+                    >
+                      {savingLocation ? "Salvando..." : "Salvar Filtro"}
+                    </button>
+                    {(filterState || filterCities.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilterState("");
+                          setFilterCities([]);
+                          handleSaveLocationFilter("", [], includeRemote);
+                        }}
+                        className="gupy-btn-secondary shrink-0 px-2.5 py-2 text-xs"
+                        title="Limpar filtro"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {filterCities.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {filterCities.map((city) => (
+                      <span
+                        key={city}
+                        className="gupy-badge inline-flex items-center gap-1.5 px-3 py-1 text-xs"
+                      >
+                        {city}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCity(city)}
+                          className="font-bold hover:opacity-70"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Linha 3: Abas de Status + Ações em Lote */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-3">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {(
                     [
                       ["all", "Todas"],
@@ -885,61 +1179,26 @@ export default function HomePage() {
                       key={key}
                       type="button"
                       onClick={() => setJobStatusFilter(key)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      className={`px-3 py-1.5 text-xs transition ${
                         jobStatusFilter === key
-                          ? "bg-indigo-600 text-white"
-                          : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                          ? "gupy-btn-primary"
+                          : "gupy-btn-secondary"
                       }`}
                     >
                       {label}
                     </button>
                   ))}
-                </div>
-              </div>
-
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div className="relative w-full sm:w-80">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Filtrar por cargo, empresa ou fonte..."
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500"
-                  />
+                  <span className="ml-2 text-xs text-slate-400">
+                    Exibindo <strong>{filteredJobs.length}</strong> vaga(s)
+                  </span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={seniorityFilter}
-                    onChange={(e) =>
-                      setSeniorityFilter(e.target.value as SeniorityFilter)
-                    }
-                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500"
-                  >
-                    <option value="all">Nível: Todos</option>
-                    <option value="estagio">Estágio / Trainee</option>
-                    <option value="junior">Júnior</option>
-                    <option value="pleno">Pleno</option>
-                    <option value="senior">Sênior / Especialista</option>
-                  </select>
-
-                  <select
-                    value={sortBy}
-                    onChange={(e) =>
-                      setSortBy(e.target.value as "match" | "recent")
-                    }
-                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500"
-                  >
-                    <option value="match">Ordenar: Maior Match</option>
-                    <option value="recent">Ordenar: Mais Recentes</option>
-                  </select>
-
                   <button
                     type="button"
                     onClick={handleExportCsv}
                     disabled={filteredJobs.length === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-40"
+                    className="gupy-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"
                   >
                     <Download className="h-3.5 w-3.5" />
                     Exportar CSV
@@ -948,170 +1207,17 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={handleClearNonFavorites}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-400 transition hover:text-rose-300"
+                    className="gupy-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Limpar não favoritas
                   </button>
                 </div>
               </div>
+            </section>
 
-            {/* Filtro por Estado e até 5 Cidades */}
-            <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
-                  <MapPin className="h-4 w-4 text-emerald-400" />
-                  <span>Filtrar por Modelo, Estado e Cidades (até 5)</span>
-                  <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
-                    {filterCities.length}/5 cidades
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {(
-                    [
-                      ["all", "Todos"],
-                      ["remote", "Remoto"],
-                      ["hybrid", "Híbrido"],
-                      ["onsite", "Presencial"],
-                    ] as const
-                  ).map(([mode, label]) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setWorkMode(mode)}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
-                        workMode === mode
-                          ? "bg-emerald-600 text-white"
-                          : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-
-                  <label className="ml-2 inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={onlyBrazil}
-                      onChange={(e) => setOnlyBrazil(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 accent-emerald-600"
-                    />
-                    Apenas Brasil
-                  </label>
-
-                  <label className="ml-1 inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={includeRemote}
-                      onChange={(e) => setIncludeRemote(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 accent-indigo-600"
-                    />
-                    Incluir remotas
-                  </label>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-12">
-                <div className="sm:col-span-4">
-                  <select
-                    value={filterState}
-                    onChange={(e) => setFilterState(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                  >
-                    <option value="">Todos os estados (Brasil / Global)</option>
-                    {BRAZIL_STATES.map((st) => (
-                      <option key={st.uf} value={st.uf}>
-                        {st.name} ({st.uf})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex gap-2 sm:col-span-5">
-                  <input
-                    type="text"
-                    list="brazil-cities-list"
-                    value={cityInput}
-                    disabled={filterCities.length >= 5}
-                    onChange={(e) => setCityInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddCity(cityInput);
-                      }
-                    }}
-                    placeholder={
-                      filterCities.length >= 5
-                        ? "Limite de 5 cidades atingido"
-                        : "Digite ou escolha uma cidade..."
-                    }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-indigo-500 disabled:opacity-50"
-                  />
-                  <datalist id="brazil-cities-list">
-                    {(selectedStateObj
-                      ? selectedStateObj.cities
-                      : BRAZIL_STATES.flatMap((s) => s.cities)
-                    ).map((city) => (
-                      <option key={city} value={city} />
-                    ))}
-                  </datalist>
-                  <button
-                    type="button"
-                    disabled={filterCities.length >= 5 || !cityInput.trim()}
-                    onClick={() => handleAddCity(cityInput)}
-                    className="shrink-0 rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-40"
-                  >
-                    Adicionar
-                  </button>
-                </div>
-
-                <div className="flex gap-2 sm:col-span-3">
-                  <button
-                    type="button"
-                    disabled={savingLocation}
-                    onClick={() => handleSaveLocationFilter()}
-                    className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    {savingLocation ? "Salvando..." : "Salvar no Monitor"}
-                  </button>
-                  {(filterState || filterCities.length > 0) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFilterState("");
-                        setFilterCities([]);
-                        handleSaveLocationFilter("", [], includeRemote);
-                      }}
-                      className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-xs text-slate-400 hover:text-rose-300"
-                      title="Limpar filtro"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {filterCities.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {filterCities.map((city) => (
-                    <span
-                      key={city}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300"
-                    >
-                      {city}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCity(city)}
-                        className="text-emerald-400 hover:text-rose-400"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Lista de Vagas */}
+            <section className="space-y-3">
 
             {filteredJobs.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-800 py-14 text-center">
@@ -1144,50 +1250,56 @@ export default function HomePage() {
                   return (
                     <div
                       key={job.id}
-                      className="gupy-job-card flex flex-col justify-between gap-3 p-4.5 sm:flex-row sm:items-center"
+                      className="gupy-job-card flex flex-col justify-between gap-4 p-5 lg:flex-row lg:items-center"
                     >
-                      <div className="min-w-0 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
-                            {job.source_name}
-                          </span>
-                          <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
-                            {badges.mode}
-                          </span>
-                          {badges.seniority && (
-                            <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
-                              {badges.seniority}
-                            </span>
-                          )}
-                          {matchedCount > 0 && (
-                            <span className="gupy-btn-primary px-2.5 py-0.5 text-[11px]">
-                              {matchedCount} match(es)
-                            </span>
-                          )}
+                      <div className="flex min-w-0 items-start gap-3.5">
+                        <div className="gupy-subcard flex h-11 w-11 shrink-0 items-center justify-center text-sm font-bold uppercase">
+                          {(job.company || "V").trim().charAt(0)}
                         </div>
 
-                        <h3 className="truncate text-base font-semibold text-slate-100">
-                          {job.title}
-                        </h3>
-                        <p className="text-xs text-slate-400">
-                          {job.company} • {job.location || "Não informado"}
-                        </p>
-
-                        {matchedTerms.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                            <span className="text-[11px] text-slate-500">
-                              Compatível com seu currículo:
+                        <div className="min-w-0 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
+                              {job.source_name}
                             </span>
-                            {matchedTerms.slice(0, 6).map((term) => (
-                              <span
-                                key={term}
-                                className="gupy-badge px-2 py-0.5 text-[10px]"
-                              >
-                                ✓ {term}
+                            <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
+                              {badges.mode}
+                            </span>
+                            {badges.seniority && (
+                              <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
+                                {badges.seniority}
                               </span>
-                            ))}
+                            )}
+                            {matchedCount > 0 && (
+                              <span className="gupy-btn-primary px-2.5 py-0.5 text-[11px]">
+                                {matchedCount} match(es)
+                              </span>
+                            )}
                           </div>
-                        )}
+
+                          <h3 className="truncate text-base font-bold">
+                            {job.title}
+                          </h3>
+                          <p className="text-xs text-slate-400">
+                            {job.company} • {job.location || "Não informado"}
+                          </p>
+
+                          {matchedTerms.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                              <span className="text-[11px] text-slate-500">
+                                Compatível com seu currículo:
+                              </span>
+                              {matchedTerms.slice(0, 6).map((term) => (
+                                <span
+                                  key={term}
+                                  className="gupy-badge px-2 py-0.5 text-[10px]"
+                                >
+                                  ✓ {term}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -1268,16 +1380,46 @@ export default function HomePage() {
 
         {/* ABA: MINHAS CANDIDATURAS (Funil estilo Gupy) */}
         {activeTab === "applications" && (
-          <section className="gupy-card p-6">
-            <div className="mb-5">
-              <h2 className="text-lg font-semibold">
-                Minhas Candidaturas &amp; Vagas Salvas
-              </h2>
-              <p className="text-xs text-slate-400">
-                Acompanhe a etapa de cada processo seletivo (Currículo Enviado,
-                Teste, Entrevista, Proposta) e registre anotações pessoais.
-              </p>
+          <div className="space-y-5">
+            {/* Resumo das Etapas do Funil */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {(
+                [
+                  ["salva", "Salvas / Interesse"],
+                  ["enviado", "Currículo Enviado"],
+                  ["teste", "Teste Técnico"],
+                  ["entrevista", "Entrevista"],
+                  ["proposta", "Proposta"],
+                ] as const
+              ).map(([stageKey, stageLabel]) => {
+                const count =
+                  data?.jobs.filter((j) => {
+                    const effective =
+                      j.application_stage ||
+                      (j.applied ? "enviado" : j.saved ? "salva" : "");
+                    return effective === stageKey;
+                  }).length ?? 0;
+
+                return (
+                  <div key={stageKey} className="gupy-card p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      {stageLabel}
+                    </p>
+                    <p className="mt-1 text-2xl font-bold">{count}</p>
+                  </div>
+                );
+              })}
             </div>
+
+            <section className="gupy-card p-6">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold">
+                  Processos Seletivos em Acompanhamento
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Atualize a etapa de cada vaga e registre anotações importantes.
+                </p>
+              </div>
 
             {data?.jobs.filter(
               (j) => j.applied || j.saved || j.application_stage
@@ -1422,6 +1564,7 @@ export default function HomePage() {
               </div>
             )}
           </section>
+          </div>
         )}
 
         {/* Modal de Carta de Apresentação / Pitch */}
