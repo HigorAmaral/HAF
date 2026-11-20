@@ -29,6 +29,7 @@ import {
   BRAZIL_STATES,
   matchesLocationFilter,
   type LocationFilter,
+  type WorkModeFilter,
 } from "@/lib/brazilLocations";
 import type {
   JobRecord,
@@ -179,10 +180,11 @@ export default function HomePage() {
   const [telegramChatId, setTelegramChatId] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
 
-  // Filtro por Estado e até 5 Cidades
+  // Filtro por Estado, até 5 Cidades e Modelo de Trabalho
   const [filterState, setFilterState] = useState("");
   const [filterCities, setFilterCities] = useState<string[]>([]);
   const [includeRemote, setIncludeRemote] = useState(true);
+  const [workMode, setWorkMode] = useState<WorkModeFilter>("all");
   const [cityInput, setCityInput] = useState("");
   const [savingLocation, setSavingLocation] = useState(false);
 
@@ -209,6 +211,7 @@ export default function HomePage() {
       setFilterState(parsed.locationFilter?.state || "");
       setFilterCities(parsed.locationFilter?.cities || []);
       setIncludeRemote(parsed.locationFilter?.includeRemote ?? true);
+      setWorkMode(parsed.locationFilter?.workMode || "all");
       setAuthState("authenticated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
@@ -342,7 +345,8 @@ export default function HomePage() {
   const handleSaveLocationFilter = async (
     nextState = filterState,
     nextCities = filterCities,
-    nextRemote = includeRemote
+    nextRemote = includeRemote,
+    nextWorkMode = workMode
   ) => {
     setSavingLocation(true);
     try {
@@ -353,10 +357,11 @@ export default function HomePage() {
           filterState: nextState,
           filterCities: nextCities,
           includeRemote: nextRemote,
+          workMode: nextWorkMode,
         }),
       });
       if (!res.ok) throw new Error("Erro ao salvar filtro de localização");
-      showToast("Filtro de estado e cidades salvo no monitor!");
+      showToast("Filtro de localização e modelo salvo no monitor!");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Erro ao salvar filtro");
     } finally {
@@ -428,6 +433,7 @@ export default function HomePage() {
       state: filterState,
       cities: filterCities,
       includeRemote,
+      workMode,
     };
 
     const list = data.jobs.filter((j) => {
@@ -460,7 +466,7 @@ export default function HomePage() {
       const scoreB = resumeTerms.filter((t) => hayB.includes(t)).length;
       return scoreB - scoreA;
     });
-  }, [data?.jobs, search, filterState, filterCities, includeRemote, jobStatusFilter, resumeTerms]);
+  }, [data?.jobs, search, filterState, filterCities, includeRemote, workMode, jobStatusFilter, resumeTerms]);
 
   if (authState === "checking") {
     return (
@@ -668,21 +674,45 @@ export default function HomePage() {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
                   <MapPin className="h-4 w-4 text-emerald-400" />
-                  <span>Filtrar por Estado e Cidades (até 5)</span>
+                  <span>Filtrar por Modelo, Estado e Cidades (até 5)</span>
                   <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
                     {filterCities.length}/5 cidades
                   </span>
                 </div>
 
-                <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={includeRemote}
-                    onChange={(e) => setIncludeRemote(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 accent-indigo-600"
-                  />
-                  Incluir vagas remotas
-                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(
+                    [
+                      ["all", "Todos"],
+                      ["remote", "Remoto"],
+                      ["hybrid", "Híbrido"],
+                      ["onsite", "Presencial"],
+                    ] as const
+                  ).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setWorkMode(mode)}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                        workMode === mode
+                          ? "bg-emerald-600 text-white"
+                          : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+
+                  <label className="ml-2 inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={includeRemote}
+                      onChange={(e) => setIncludeRemote(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 accent-indigo-600"
+                    />
+                    Incluir remotas
+                  </label>
+                </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-12">

@@ -4,6 +4,7 @@ import {
   getAlertSettings,
   getLocationFilter,
   getSql,
+  syncMissingDefaultSourcesForUser,
 } from "../db";
 import { notifyNewJobs, type NotificationResult } from "../notifications";
 import { runSourceConnector } from "./connectors";
@@ -32,6 +33,7 @@ export async function runJobMonitorForUser(
   const runId = runRows[0].id as number;
 
   try {
+    await syncMissingDefaultSourcesForUser(userId);
     const sources = (await sql`
       SELECT * FROM sources
       WHERE user_id = ${userId} AND enabled = TRUE

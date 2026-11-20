@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       filterState?: string;
       filterCities?: string[];
       includeRemote?: boolean;
+      workMode?: string;
     };
 
     if (body.alertEmail !== undefined) {
@@ -61,6 +62,17 @@ export async function POST(req: NextRequest) {
       await sql`
         INSERT INTO user_settings (user_id, key, value, updated_at)
         VALUES (${user.userId}, 'include_remote', ${String(Boolean(body.includeRemote))}, NOW())
+        ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `;
+    }
+
+    if (body.workMode !== undefined) {
+      const mode = ["all", "remote", "hybrid", "onsite"].includes(body.workMode)
+        ? body.workMode
+        : "all";
+      await sql`
+        INSERT INTO user_settings (user_id, key, value, updated_at)
+        VALUES (${user.userId}, 'work_mode', ${mode}, NOW())
         ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
       `;
     }

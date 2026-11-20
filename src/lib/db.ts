@@ -158,17 +158,7 @@ export async function ensureSchema(): Promise<void> {
 }
 
 export async function seedDefaultSourcesForUser(userId: number): Promise<void> {
-  await ensureSchema();
-  const sql = getSql();
-  const existing = await sql`SELECT COUNT(*)::int AS count FROM sources WHERE user_id = ${userId}`;
-  if (existing[0]?.count === 0) {
-    for (const src of DEFAULT_SOURCES) {
-      await sql`
-        INSERT INTO sources (user_id, name, type, target, enabled)
-        VALUES (${userId}, ${src.name}, ${src.type}, ${src.target}, TRUE)
-      `;
-    }
-  }
+  await syncMissingDefaultSourcesForUser(userId);
 }
 
 export async function syncMissingDefaultSourcesForUser(
@@ -228,13 +218,14 @@ export async function getLocationFilter(userId: number): Promise<{
   state: string;
   cities: string[];
   includeRemote: boolean;
+  workMode: "all" | "remote" | "hybrid" | "onsite";
 }> {
   await ensureSchema();
   const sql = getSql();
   const rows = (await sql`
     SELECT key, value FROM user_settings
     WHERE user_id = ${userId}
-      AND key IN ('filter_state', 'filter_cities', 'include_remote')
+      AND key IN ('filter_state', 'filter_cities', 'include_remote', 'work_mode')
   `) as Array<{ key: string; value: string }>;
 
   const map = new Map(rows.map((r) => [r.key, r.value]));
@@ -248,9 +239,15 @@ export async function getLocationFilter(userId: number): Promise<{
     cities = [];
   }
 
+  const rawMode = map.get("work_mode") || "all";
+  const workMode = (["all", "remote", "hybrid", "onsite"].includes(rawMode)
+    ? rawMode
+    : "all") as "all" | "remote" | "hybrid" | "onsite";
+
   return {
     state: map.get("filter_state") || "",
     cities,
     includeRemote: map.get("include_remote") !== "false",
+    workMode,
   };
 }

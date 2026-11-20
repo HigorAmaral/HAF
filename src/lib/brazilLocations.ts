@@ -115,10 +115,13 @@ export const BRAZIL_STATES: BrazilState[] = [
   { uf: "TO", name: "Tocantins", cities: ["Palmas", "Araguaína"] },
 ];
 
+export type WorkModeFilter = "all" | "remote" | "hybrid" | "onsite";
+
 export interface LocationFilter {
   state: string; // UF (ex: "SP") ou ""
   cities: string[]; // até 5 cidades
   includeRemote: boolean;
+  workMode?: WorkModeFilter;
 }
 
 function normalizeText(value: string): string {
@@ -133,15 +136,22 @@ export function matchesLocationFilter(
   jobText: string,
   filter: LocationFilter
 ): boolean {
+  const normalized = normalizeText(jobText);
+  const isRemote = /\b(remoto|remote|home office|anywhere|telecommut)\b/.test(normalized);
+  const isHybrid = /\b(hibrido|hybrid)\b/.test(normalized);
+  const workMode = filter.workMode || "all";
+
+  if (workMode === "remote" && !isRemote) return false;
+  if (workMode === "hybrid" && !isHybrid) return false;
+  if (workMode === "onsite" && (isRemote || isHybrid)) return false;
+
   const hasState = Boolean(filter.state?.trim());
   const hasCities = filter.cities && filter.cities.length > 0;
 
-  // Se nenhum filtro de estado ou cidade foi definido, aceita tudo
+  // Se nenhum filtro de estado ou cidade foi definido, aceita tudo que passou no workMode
   if (!hasState && !hasCities) return true;
 
-  const normalized = normalizeText(jobText);
-
-  if (filter.includeRemote && /\b(remoto|remote|home office|anywhere)\b/.test(normalized)) {
+  if (filter.includeRemote && workMode !== "onsite" && isRemote) {
     return true;
   }
 
