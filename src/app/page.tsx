@@ -521,11 +521,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/70 backdrop-blur">
+    <div className="min-h-screen text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/75 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20">
               <Briefcase className="h-5 w-5" />
             </div>
             <div>
@@ -632,34 +632,42 @@ export default function HomePage() {
         {activeTab === "jobs" && (
           <div className="space-y-6">
             {/* Métricas rápidas */}
-            <div className="grid gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="text-xs text-slate-400">Vagas capturadas</p>
-                <p className="mt-1 text-2xl font-bold text-slate-100">
+            <div className="grid gap-4 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Vagas capturadas
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-slate-100">
                   {data?.jobs.length ?? 0}
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="text-xs text-slate-400">Favoritas</p>
-                <p className="mt-1 text-2xl font-bold text-amber-400">
+              <div className="rounded-2xl border border-amber-500/20 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
+                <p className="text-xs font-medium uppercase tracking-wider text-amber-300/80">
+                  Favoritas
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-amber-400">
                   {data?.jobs.filter((j) => j.saved).length ?? 0}
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="text-xs text-slate-400">Candidaturas</p>
-                <p className="mt-1 text-2xl font-bold text-emerald-400">
+              <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
+                <p className="text-xs font-medium uppercase tracking-wider text-emerald-300/80">
+                  Candidaturas
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-emerald-400">
                   {data?.jobs.filter((j) => j.applied).length ?? 0}
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="text-xs text-slate-400">Fontes ativas</p>
-                <p className="mt-1 text-2xl font-bold text-indigo-400">
+              <div className="rounded-2xl border border-indigo-500/20 bg-slate-900/55 p-5 shadow-lg shadow-black/20 backdrop-blur">
+                <p className="text-xs font-medium uppercase tracking-wider text-indigo-300/80">
+                  Fontes ativas
+                </p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-indigo-400">
                   {data?.sources.filter((s) => s.enabled).length ?? 0}
                 </p>
               </div>
             </div>
 
-            <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+            <section className="rounded-2xl border border-white/10 bg-slate-900/55 p-6 shadow-xl shadow-black/30 backdrop-blur">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold">
@@ -924,7 +932,7 @@ export default function HomePage() {
                   return (
                     <div
                       key={job.id}
-                      className="flex flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 transition hover:border-slate-700 sm:flex-row sm:items-center"
+                      className="group flex flex-col justify-between gap-3 rounded-2xl border border-white/[0.07] bg-slate-950/65 p-4.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/40 hover:bg-slate-900/80 hover:shadow-lg hover:shadow-indigo-950/30 sm:flex-row sm:items-center"
                     >
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
