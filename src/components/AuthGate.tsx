@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Briefcase, KeyRound, Lock, Mail, ShieldCheck, User } from "lucide-react";
+import ThemeToggle from "./ThemeToggle";
 
 interface AuthGateProps {
   onAuthenticated: () => void;
@@ -88,11 +89,13 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 text-slate-100">
-      <div className="pointer-events-none absolute -top-40 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-600/20 blur-3xl" />
-      <div className="relative w-full max-w-md space-y-6 rounded-3xl border border-white/10 bg-slate-900/75 p-8 shadow-2xl shadow-black/60 backdrop-blur-xl">
+    <div className="relative flex min-h-screen items-center justify-center px-4">
+      <div className="gupy-card relative w-full max-w-md space-y-6 p-8">
+        <div className="flex justify-end">
+          <ThemeToggle />
+        </div>
         <div className="flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20">
+          <div className="gupy-btn-primary mb-3 flex h-12 w-12 items-center justify-center rounded-2xl">
             <Briefcase className="h-6 w-6" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import AuthGate from "@/components/AuthGate";
 import ResumeBuilder, { type DbResumeRow } from "@/components/ResumeBuilder";
+import ThemeToggle from "@/components/ThemeToggle";
 import {
   BRAZIL_STATES,
   matchesLocationFilter,
@@ -521,11 +522,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen text-slate-100">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/75 backdrop-blur-xl">
+    <div className="min-h-screen">
+      <header className="gupy-header sticky top-0 z-30">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20">
+            <div className="gupy-btn-primary flex h-10 w-10 items-center justify-center rounded-xl">
               <Briefcase className="h-5 w-5" />
             </div>
             <div>
@@ -540,19 +541,21 @@ export default function HomePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <ThemeToggle />
+
             <button
               onClick={handleTestNotifications}
               disabled={testingAlert}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-50"
+              className="gupy-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
             >
-              <Bell className="h-4 w-4 text-amber-400" />
+              <Bell className="h-4 w-4" />
               {testingAlert ? "Testando..." : "Testar Alertas"}
             </button>
 
             <button
               onClick={handleRunScrape}
               disabled={running}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50"
+              className="gupy-btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs disabled:opacity-50"
             >
               {running ? (
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -566,7 +569,7 @@ export default function HomePage() {
 
             <button
               onClick={handleLogout}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-400 transition hover:text-rose-300"
+              className="gupy-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
               title="Sair da conta"
             >
               <LogOut className="h-4 w-4" />
@@ -932,7 +935,7 @@ export default function HomePage() {
                   return (
                     <div
                       key={job.id}
-                      className="group flex flex-col justify-between gap-3 rounded-2xl border border-white/[0.07] bg-slate-950/65 p-4.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-500/40 hover:bg-slate-900/80 hover:shadow-lg hover:shadow-indigo-950/30 sm:flex-row sm:items-center"
+                      className="gupy-job-card flex flex-col justify-between gap-3 p-4.5 sm:flex-row sm:items-center"
                     >
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1035,50 +1038,35 @@ export default function HomePage() {
         {/* ABA 3: ALERTAS, FILTROS & FONTES */}
         {activeTab === "settings" && (
           <div className="space-y-6">
-            {/* Status das Integrações */}
-            <section className="grid gap-4 sm:grid-cols-3">
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            {/* Status das Integrações (sem Neon Postgres) */}
+            <section className="grid gap-4 sm:grid-cols-2">
+              <div className="gupy-card flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <Database className="h-5 w-5 text-emerald-400" />
-                  <div>
-                    <p className="text-sm font-medium">Neon Postgres</p>
-                    <p className="text-xs text-slate-400">Banco conectado</p>
-                  </div>
-                </div>
-                {data?.integrations.database ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-rose-400" />
-                )}
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                <div className="flex items-center gap-3">
-                  <Send className="h-5 w-5 text-sky-400" />
+                  <Send className="h-5 w-5" />
                   <div>
                     <p className="text-sm font-medium">Telegram Bot</p>
                     <p className="text-xs text-slate-400">Chat ID pessoal</p>
                   </div>
                 </div>
                 {data?.integrations.telegram ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  <CheckCircle2 className="h-5 w-5" />
                 ) : (
-                  <XCircle className="h-5 w-5 text-amber-400" />
+                  <XCircle className="h-5 w-5" />
                 )}
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <div className="gupy-card flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-violet-400" />
+                  <Mail className="h-5 w-5" />
                   <div>
                     <p className="text-sm font-medium">E-mail (Resend)</p>
                     <p className="text-xs text-slate-400">Alertas por e-mail</p>
                   </div>
                 </div>
                 {data?.integrations.email ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  <CheckCircle2 className="h-5 w-5" />
                 ) : (
-                  <XCircle className="h-5 w-5 text-amber-400" />
+                  <XCircle className="h-5 w-5" />
                 )}
               </div>
             </section>
