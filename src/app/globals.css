@@ -3,44 +3,45 @@
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --bg-page: #f5f6f8;
-  --bg-header: rgba(255, 255, 255, 0.92);
-  --bg-card: #ffffff;
-  --bg-subtle: #f4f4f5;
-  --bg-input: #ffffff;
-  --text-primary: #111111;
-  --text-secondary: #52525b;
-  --text-muted: #71717a;
-  --border-color: #e4e4e7;
-  --border-strong: #d4d4d8;
-  --accent-bg: #111111;
-  --accent-bg-hover: #27272a;
-  --accent-text: #ffffff;
-  --badge-bg: #f4f4f5;
-  --badge-text: #18181b;
-  --badge-border: #d4d4d8;
-  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  /* Modo Light suave (off-white / pedra suave, sem brilho excessivo) */
+  --bg-page: #e6e8ed;
+  --bg-header: rgba(242, 243, 246, 0.96);
+  --bg-card: #f3f4f7;
+  --bg-subtle: #e9ebf0;
+  --bg-input: #f8f9fb;
+  --text-primary: #1e2229;
+  --text-secondary: #4b5262;
+  --text-muted: #6c7383;
+  --border-color: #d2d6e0;
+  --border-strong: #b8beca;
+  --accent-bg: #1e2229;
+  --accent-bg-hover: #323844;
+  --accent-text: #f8f9fb;
+  --badge-bg: #e4e7ee;
+  --badge-text: #1e2229;
+  --badge-border: #c8cdd8;
+  --card-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg-page: #0a0a0a;
-  --bg-header: rgba(15, 15, 17, 0.92);
-  --bg-card: #141416;
-  --bg-subtle: #1c1c1f;
-  --bg-input: #0e0e10;
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --border-color: #27272a;
-  --border-strong: #3f3f46;
-  --accent-bg: #ffffff;
-  --accent-bg-hover: #e4e4e7;
-  --accent-text: #0a0a0a;
-  --badge-bg: #1f1f23;
-  --badge-text: #f4f4f5;
-  --badge-border: #3f3f46;
-  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --bg-page: #0b0c0e;
+  --bg-header: rgba(18, 19, 23, 0.96);
+  --bg-card: #141519;
+  --bg-subtle: #1c1d22;
+  --bg-input: #101114;
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --border-color: #262830;
+  --border-strong: #383b47;
+  --accent-bg: #f3f4f6;
+  --accent-bg-hover: #e5e7eb;
+  --accent-text: #0b0c0e;
+  --badge-bg: #1f2128;
+  --badge-text: #e5e7eb;
+  --badge-border: #383b47;
+  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 @theme inline {
@@ -54,6 +55,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--bg-page);
   color: var(--text-primary);
@@ -63,7 +70,13 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Componentes estilo Gupy (Preto & Branco) */
+/* Barra lateral direita e cards estilo Gupy (Preto & Branco suave) */
+.gupy-sidebar {
+  background-color: var(--bg-header);
+  border-left: 1px solid var(--border-color);
+  backdrop-filter: blur(12px);
+}
+
 .gupy-header {
   background-color: var(--bg-header);
   border-bottom: 1px solid var(--border-color);
@@ -129,14 +142,7 @@ body {
   font-weight: 500;
 }
 
-.gupy-badge-solid {
-  background-color: var(--accent-bg);
-  color: var(--accent-text);
-  border-radius: 9999px;
-  font-weight: 600;
-}
-
-/* Inputs, Selects e Textareas estilo Gupy */
+/* Inputs, Selects e Textareas */
 input:not([type="checkbox"]):not([type="file"]),
 select,
 textarea {
@@ -168,7 +174,7 @@ button:active:not(:disabled) {
   transform: scale(0.985);
 }
 
-/* Mapeamento monocromático automático para garantir Preto & Branco em todos os componentes */
+/* Mapeamento monocromático suave em todos os componentes */
 .bg-slate-950,
 .bg-slate-900\/60,
 .bg-slate-900\/55,

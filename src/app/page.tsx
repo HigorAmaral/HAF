@@ -16,6 +16,7 @@ import {
   LogOut,
   Mail,
   MapPin,
+  Menu,
   Play,
   Plus,
   RefreshCw,
@@ -23,6 +24,7 @@ import {
   Send,
   Settings,
   Trash2,
+  X,
   XCircle,
 } from "lucide-react";
 import AuthGate from "@/components/AuthGate";
@@ -165,6 +167,7 @@ export default function HomePage() {
   const [testingAlert, setTestingAlert] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [jobStatusFilter, setJobStatusFilter] = useState<
     "all" | "saved" | "applied" | "pending"
   >("all");
@@ -523,39 +526,98 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      <header className="gupy-header sticky top-0 z-30">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div className="flex items-center gap-3.5">
-            <div className="gupy-btn-primary flex h-10 w-10 items-center justify-center rounded-xl">
-              <Briefcase className="h-5 w-5" />
+      {/* Barra superior compacta exclusiva para Mobile/Tablet (< lg) */}
+      <header className="gupy-header sticky top-0 z-30 flex items-center justify-between px-4 py-3 lg:hidden">
+        <div className="flex items-center gap-2.5">
+          <div className="gupy-btn-primary flex h-9 w-9 items-center justify-center rounded-xl">
+            <Briefcase className="h-4 w-4" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold leading-tight">HAF</h1>
+            <p className="text-[11px] text-slate-400">
+              {data?.user?.name || "Monitor de Vagas"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRunScrape}
+            disabled={running}
+            className="gupy-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
+          >
+            {running ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            <span>{running ? "Varrendo..." : "Buscar"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            className="gupy-btn-secondary inline-flex items-center justify-center p-2"
+            aria-label="Abrir menu lateral"
+          >
+            {mobileMenuOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* Overlay Mobile quando o menu direito está aberto */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-xs lg:hidden"
+        />
+      )}
+
+      {/* Barra de Navegação Fixa no Lado Direito */}
+      <aside
+        className={`gupy-sidebar fixed top-0 right-0 bottom-0 z-40 flex w-72 flex-col justify-between p-5 transition-transform duration-200 ${
+          mobileMenuOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <div className="space-y-6 overflow-y-auto">
+          {/* Logo e Usuário */}
+          <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="gupy-btn-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-bold tracking-tight">
+                  HAF — Vagas
+                </h1>
+                <p className="truncate text-xs text-slate-400">
+                  Olá, {data?.user?.name || "Usuário"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight">
-                HAF — Monitor de Vagas
-              </h1>
-              <p className="text-xs text-slate-400">
-                Olá, {data?.user?.name || "Usuário"} • Busca unificada em todas
-                as fontes
-              </p>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="gupy-btn-secondary p-1.5 lg:hidden"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <ThemeToggle />
-
+          {/* Ação Principal de Varredura */}
+          <div className="space-y-2">
             <button
-              onClick={handleTestNotifications}
-              disabled={testingAlert}
-              className="gupy-btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
-            >
-              <Bell className="h-4 w-4" />
-              {testingAlert ? "Testando..." : "Testar Alertas"}
-            </button>
-
-            <button
-              onClick={handleRunScrape}
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleRunScrape();
+              }}
               disabled={running}
-              className="gupy-btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs disabled:opacity-50"
+              className="gupy-btn-primary flex w-full items-center justify-center gap-2 py-2.5 text-xs shadow-xs disabled:opacity-50"
             >
               {running ? (
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -568,57 +630,100 @@ export default function HomePage() {
             </button>
 
             <button
-              onClick={handleLogout}
-              className="gupy-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
-              title="Sair da conta"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleTestNotifications();
+              }}
+              disabled={testingAlert}
+              className="gupy-btn-secondary flex w-full items-center justify-center gap-2 py-2 text-xs disabled:opacity-50"
             >
-              <LogOut className="h-4 w-4" />
-              Sair
+              <Bell className="h-4 w-4" />
+              {testingAlert ? "Testando..." : "Testar Alertas"}
             </button>
           </div>
+
+          {/* Menu de Navegação Vertical */}
+          <nav className="space-y-1.5">
+            <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              Navegação
+            </p>
+
+            <button
+              onClick={() => {
+                setActiveTab("jobs");
+                setMobileMenuOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                activeTab === "jobs"
+                  ? "gupy-btn-primary"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2.5">
+                <Briefcase className="h-4 w-4" />
+                <span>Vagas</span>
+              </span>
+              <span className="gupy-badge px-2 py-0.5 text-xs">
+                {data?.jobs.length ?? 0}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("resume");
+                setMobileMenuOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                activeTab === "resume"
+                  ? "gupy-btn-primary"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2.5">
+                <FileText className="h-4 w-4" />
+                <span>Meu Currículo</span>
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("settings");
+                setMobileMenuOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                activeTab === "settings"
+                  ? "gupy-btn-primary"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2.5">
+                <Settings className="h-4 w-4" />
+                <span>Alertas &amp; Fontes</span>
+              </span>
+              <span className="gupy-badge px-2 py-0.5 text-xs">
+                {data?.sources.length ?? 0}
+              </span>
+            </button>
+          </nav>
         </div>
 
-        {/* Navegação em Abas */}
-        <div className="mx-auto flex max-w-7xl gap-2 px-6 pb-3">
-          <button
-            onClick={() => setActiveTab("jobs")}
-            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition ${
-              activeTab === "jobs"
-                ? "bg-indigo-600 text-white"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-            }`}
-          >
-            <Briefcase className="h-4 w-4" />
-            Vagas ({data?.jobs.length ?? 0})
-          </button>
+        {/* Rodapé da Barra Direita: Tema Dark/Light e Sair */}
+        <div className="flex items-center justify-between gap-2 border-t border-slate-800 pt-4">
+          <ThemeToggle />
 
           <button
-            onClick={() => setActiveTab("resume")}
-            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition ${
-              activeTab === "resume"
-                ? "bg-indigo-600 text-white"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-            }`}
+            onClick={handleLogout}
+            className="gupy-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
+            title="Sair da conta"
           >
-            <FileText className="h-4 w-4" />
-            Meu Currículo (PDF / Construtor)
-          </button>
-
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition ${
-              activeTab === "settings"
-                ? "bg-indigo-600 text-white"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-            }`}
-          >
-            <Settings className="h-4 w-4" />
-            Alertas, Filtros &amp; Fontes ({data?.sources.length ?? 0})
+            <LogOut className="h-4 w-4" />
+            <span>Sair</span>
           </button>
         </div>
-      </header>
+      </aside>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
+      {/* Conteúdo Principal com margem direita para a barra fixa no desktop */}
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:mr-72 lg:px-8 lg:py-8">
         {toast && (
           <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/70 px-4 py-3 text-sm text-indigo-100">
             {toast}
