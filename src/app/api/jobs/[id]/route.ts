@@ -18,19 +18,26 @@ export async function PATCH(
     const body = (await req.json()) as {
       saved?: boolean;
       applied?: boolean;
+      application_stage?: string;
+      notes?: string;
     };
 
     const rows = await sql`
       UPDATE jobs
       SET
         saved = COALESCE(${body.saved ?? null}, saved),
-        applied = COALESCE(${body.applied ?? null}, applied)
+        applied = COALESCE(${body.applied ?? null}, applied),
+        application_stage = COALESCE(${body.application_stage ?? null}, application_stage),
+        notes = COALESCE(${body.notes ?? null}, notes)
       WHERE id = ${Number(id)} AND user_id = ${user.userId}
       RETURNING *
     `;
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "Vaga não encontrada" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Vaga não encontrada" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(rows[0]);
@@ -58,7 +65,8 @@ export async function DELETE(
     await sql`DELETE FROM jobs WHERE id = ${Number(id)} AND user_id = ${user.userId}`;
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erro ao remover vaga";
+    const message =
+      err instanceof Error ? err.message : "Erro ao remover vaga";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

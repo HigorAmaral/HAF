@@ -46,6 +46,8 @@ export interface JobRecord {
   notified: boolean;
   saved?: boolean;
   applied?: boolean;
+  application_stage?: string;
+  notes?: string;
   created_at: string;
 }
 

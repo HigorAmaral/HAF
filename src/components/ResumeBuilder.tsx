@@ -430,7 +430,7 @@ export default function ResumeBuilder({
 
         {/* Prévia ao vivo estilo A4 */}
         {showPreview && (
-          <div className="mb-6 overflow-hidden rounded-xl border border-slate-700 bg-white text-slate-800 shadow-xl">
+          <div className="gupy-card mb-6 overflow-hidden">
             <div className="flex items-center gap-5 bg-slate-900 px-6 py-5 text-white">
               {form.photoUrl && (
                 // eslint-disable-next-line @next/next/no-img-element

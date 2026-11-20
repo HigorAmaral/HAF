@@ -3,24 +3,24 @@
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  /* Modo Light suave (off-white / pedra suave, sem brilho excessivo) */
-  --bg-page: #e6e8ed;
-  --bg-header: rgba(242, 243, 246, 0.96);
-  --bg-card: #f3f4f7;
-  --bg-subtle: #e9ebf0;
-  --bg-input: #f8f9fb;
-  --text-primary: #1e2229;
-  --text-secondary: #4b5262;
-  --text-muted: #6c7383;
-  --border-color: #d2d6e0;
-  --border-strong: #b8beca;
-  --accent-bg: #1e2229;
-  --accent-bg-hover: #323844;
-  --accent-text: #f8f9fb;
-  --badge-bg: #e4e7ee;
-  --badge-text: #1e2229;
-  --badge-border: #c8cdd8;
-  --card-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  /* Modo Light ainda mais suave e confortável (cinza-pedra acetinado, zero brilho branco forte) */
+  --bg-page: #d5d9e2;
+  --bg-header: rgba(220, 224, 233, 0.96);
+  --bg-card: #e1e5ed;
+  --bg-subtle: #d8dce6;
+  --bg-input: #e8ebf2;
+  --text-primary: #1a1d24;
+  --text-secondary: #434a59;
+  --text-muted: #61697a;
+  --border-color: #c2c7d4;
+  --border-strong: #a9b0c0;
+  --accent-bg: #1c2028;
+  --accent-bg-hover: #2d3340;
+  --accent-text: #ebeef5;
+  --badge-bg: #d0d5e0;
+  --badge-text: #1a1d24;
+  --badge-border: #b4bccb;
+  --card-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
 }
 
 [data-theme="dark"] {
@@ -70,10 +70,10 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Barra lateral direita e cards estilo Gupy (Preto & Branco suave) */
+/* Barra lateral esquerda e cards estilo Gupy (Preto & Branco suave) */
 .gupy-sidebar {
   background-color: var(--bg-header);
-  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   backdrop-filter: blur(12px);
 }
 

@@ -154,7 +154,48 @@ const NO_TARGET_TYPES: SourceType[] = [
   "workingnomads",
 ];
 
-type TabKey = "jobs" | "resume" | "settings";
+type TabKey = "jobs" | "applications" | "resume" | "settings";
+type SeniorityFilter = "all" | "estagio" | "junior" | "pleno" | "senior";
+
+const APPLICATION_STAGES: Array<{ value: string; label: string }> = [
+  { value: "", label: "Etapa: Não iniciada" },
+  { value: "salva", label: "Interesse / Salva" },
+  { value: "enviado", label: "Currículo Enviado" },
+  { value: "teste", label: "Teste / Desafio Técnico" },
+  { value: "entrevista", label: "Entrevista RH / Técnica" },
+  { value: "proposta", label: "Proposta / Aprovado" },
+  { value: "encerrada", label: "Encerrada / Sem retorno" },
+];
+
+function detectJobBadges(jobText: string): {
+  mode: string;
+  seniority: string | null;
+} {
+  const norm = jobText
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  let mode = "Presencial / Local";
+  if (/\b(remoto|remote|home office|anywhere)\b/.test(norm)) {
+    mode = "100% Remoto";
+  } else if (/\b(hibrido|hybrid)\b/.test(norm)) {
+    mode = "Híbrido";
+  }
+
+  let seniority: string | null = null;
+  if (/\b(estagio|estagiario|intern|trainee)\b/.test(norm)) {
+    seniority = "Estágio / Trainee";
+  } else if (/\b(junior|jr)\b/.test(norm)) {
+    seniority = "Júnior";
+  } else if (/\b(pleno|mid)\b/.test(norm)) {
+    seniority = "Pleno";
+  } else if (/\b(senior|sr|lead|especialista|staff)\b/.test(norm)) {
+    seniority = "Sênior";
+  }
+
+  return { mode, seniority };
+}
 
 export default function HomePage() {
   const [authState, setAuthState] = useState<
@@ -171,7 +212,11 @@ export default function HomePage() {
   const [jobStatusFilter, setJobStatusFilter] = useState<
     "all" | "saved" | "applied" | "pending"
   >("all");
+  const [seniorityFilter, setSeniorityFilter] = useState<SeniorityFilter>("all");
   const [sortBy, setSortBy] = useState<"match" | "recent">("match");
+  const [pitchJob, setPitchJob] = useState<JobRecord | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
   // Form nova fonte
   const [sourceName, setSourceName] = useState("");
@@ -401,7 +446,12 @@ export default function HomePage() {
 
   const handleToggleJobFlag = async (
     jobId: number,
-    patch: { saved?: boolean; applied?: boolean }
+    patch: {
+      saved?: boolean;
+      applied?: boolean;
+      application_stage?: string;
+      notes?: string;
+    }
   ) => {
     await fetch(`/api/jobs/${jobId}`, {
       method: "PATCH",
@@ -498,7 +548,23 @@ export default function HomePage() {
             : jobStatusFilter === "applied"
               ? Boolean(j.applied)
               : !j.applied;
-      return matchesSearch && matchesLoc && matchesStatus;
+
+      const normTitle = `${j.title} ${j.location || ""}`
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      const matchesSeniority =
+        seniorityFilter === "all"
+          ? true
+          : seniorityFilter === "estagio"
+            ? /\b(estagio|estagiario|intern|trainee)\b/.test(normTitle)
+            : seniorityFilter === "junior"
+              ? /\b(junior|jr)\b/.test(normTitle)
+              : seniorityFilter === "pleno"
+                ? /\b(pleno|mid)\b/.test(normTitle)
+                : /\b(senior|sr|lead|especialista|staff)\b/.test(normTitle);
+
+      return matchesSearch && matchesLoc && matchesStatus && matchesSeniority;
     });
 
     if (sortBy === "recent" || resumeTerms.length === 0) return list;
@@ -510,7 +576,7 @@ export default function HomePage() {
       const scoreB = resumeTerms.filter((t) => hayB.includes(t)).length;
       return scoreB - scoreA;
     });
-  }, [data?.jobs, search, filterState, filterCities, includeRemote, workMode, onlyBrazil, jobStatusFilter, sortBy, resumeTerms]);
+  }, [data?.jobs, search, filterState, filterCities, includeRemote, workMode, onlyBrazil, jobStatusFilter, seniorityFilter, sortBy, resumeTerms]);
 
   if (authState === "checking") {
     return (
@@ -577,10 +643,10 @@ export default function HomePage() {
         />
       )}
 
-      {/* Barra de Navegação Fixa no Lado Direito */}
+      {/* Barra de Navegação Fixa no Lado Esquerdo */}
       <aside
-        className={`gupy-sidebar fixed top-0 right-0 bottom-0 z-40 flex w-72 flex-col justify-between p-5 transition-transform duration-200 ${
-          mobileMenuOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        className={`gupy-sidebar fixed top-0 left-0 bottom-0 z-40 flex w-72 flex-col justify-between p-5 transition-transform duration-200 ${
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         <div className="space-y-6 overflow-y-auto">
@@ -661,10 +727,30 @@ export default function HomePage() {
             >
               <span className="inline-flex items-center gap-2.5">
                 <Briefcase className="h-4 w-4" />
-                <span>Vagas</span>
+                <span>Buscar Vagas</span>
               </span>
               <span className="gupy-badge px-2 py-0.5 text-xs">
                 {data?.jobs.length ?? 0}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("applications");
+                setMobileMenuOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                activeTab === "applications"
+                  ? "gupy-btn-primary"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2.5">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Minhas Candidaturas</span>
+              </span>
+              <span className="gupy-badge px-2 py-0.5 text-xs">
+                {data?.jobs.filter((j) => j.applied || j.saved || j.application_stage).length ?? 0}
               </span>
             </button>
 
@@ -722,8 +808,8 @@ export default function HomePage() {
         </div>
       </aside>
 
-      {/* Conteúdo Principal com margem direita para a barra fixa no desktop */}
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:mr-72 lg:px-8 lg:py-8">
+      {/* Conteúdo Principal com margem esquerda para a barra fixa no desktop */}
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:ml-72 lg:px-8 lg:py-8">
         {toast && (
           <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/70 px-4 py-3 text-sm text-indigo-100">
             {toast}
@@ -824,6 +910,20 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={seniorityFilter}
+                    onChange={(e) =>
+                      setSeniorityFilter(e.target.value as SeniorityFilter)
+                    }
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500"
+                  >
+                    <option value="all">Nível: Todos</option>
+                    <option value="estagio">Estágio / Trainee</option>
+                    <option value="junior">Júnior</option>
+                    <option value="pleno">Pleno</option>
+                    <option value="senior">Sênior / Especialista</option>
+                  </select>
+
                   <select
                     value={sortBy}
                     onChange={(e) =>
@@ -1033,40 +1133,96 @@ export default function HomePage() {
               <div className="space-y-3">
                 {filteredJobs.map((job) => {
                   const hay = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
-                  const matchedCount = resumeTerms.filter((t) =>
+                  const matchedTerms = resumeTerms.filter((t) =>
                     hay.includes(t)
-                  ).length;
+                  );
+                  const matchedCount = matchedTerms.length;
+                  const badges = detectJobBadges(
+                    `${job.title} ${job.location || ""}`
+                  );
 
                   return (
                     <div
                       key={job.id}
                       className="gupy-job-card flex flex-col justify-between gap-3 p-4.5 sm:flex-row sm:items-center"
                     >
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-md bg-indigo-500/15 px-2 py-0.5 text-[11px] font-medium text-indigo-300">
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
                             {job.source_name}
                           </span>
-                          {matchedCount > 0 && (
-                            <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">
-                              {matchedCount} match(es) com seu currículo
+                          <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
+                            {badges.mode}
+                          </span>
+                          {badges.seniority && (
+                            <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
+                              {badges.seniority}
                             </span>
                           )}
-                          {job.notified && (
-                            <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                              Notificada
+                          {matchedCount > 0 && (
+                            <span className="gupy-btn-primary px-2.5 py-0.5 text-[11px]">
+                              {matchedCount} match(es)
                             </span>
                           )}
                         </div>
-                        <h3 className="truncate font-semibold text-slate-100">
+
+                        <h3 className="truncate text-base font-semibold text-slate-100">
                           {job.title}
                         </h3>
                         <p className="text-xs text-slate-400">
                           {job.company} • {job.location || "Não informado"}
                         </p>
+
+                        {matchedTerms.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                            <span className="text-[11px] text-slate-500">
+                              Compatível com seu currículo:
+                            </span>
+                            {matchedTerms.slice(0, 6).map((term) => (
+                              <span
+                                key={term}
+                                className="gupy-badge px-2 py-0.5 text-[10px]"
+                              >
+                                ✓ {term}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <select
+                          value={job.application_stage || (job.applied ? "enviado" : "")}
+                          onChange={(e) => {
+                            const stage = e.target.value;
+                            handleToggleJobFlag(job.id, {
+                              application_stage: stage,
+                              applied: Boolean(
+                                stage && stage !== "salva"
+                              ),
+                              saved: stage === "salva" ? true : job.saved,
+                            });
+                          }}
+                          className="px-2.5 py-2 text-xs"
+                          title="Etapa da candidatura"
+                        >
+                          {APPLICATION_STAGES.map((st) => (
+                            <option key={st.value} value={st.value}>
+                              {st.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => setPitchJob(job)}
+                          className="gupy-btn-secondary inline-flex items-center gap-1 px-2.5 py-2 text-xs"
+                          title="Gerar carta de apresentação para esta vaga"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          <span>Carta</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() =>
@@ -1074,37 +1230,19 @@ export default function HomePage() {
                           }
                           className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
                             job.saved
-                              ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
-                              : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200"
+                              ? "gupy-btn-primary"
+                              : "gupy-btn-secondary"
                           }`}
                           title="Favoritar vaga"
                         >
                           <Bookmark className="h-3.5 w-3.5" />
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleToggleJobFlag(job.id, {
-                              applied: !job.applied,
-                            })
-                          }
-                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
-                            job.applied
-                              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                              : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200"
-                          }`}
-                          title="Marcar como candidatada"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          {job.applied ? "Candidatado" : "Candidatar"}
-                        </button>
-
                         <a
                           href={job.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
+                          className="gupy-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
                         >
                           Abrir vaga
                           <ExternalLink className="h-3.5 w-3.5" />
@@ -1113,7 +1251,7 @@ export default function HomePage() {
                         <button
                           type="button"
                           onClick={() => handleDeleteJob(job.id)}
-                          className="rounded-lg border border-slate-800 p-2 text-slate-500 transition hover:text-rose-400"
+                          className="gupy-btn-secondary p-2"
                           title="Remover vaga"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1125,6 +1263,221 @@ export default function HomePage() {
               </div>
             )}
           </section>
+          </div>
+        )}
+
+        {/* ABA: MINHAS CANDIDATURAS (Funil estilo Gupy) */}
+        {activeTab === "applications" && (
+          <section className="gupy-card p-6">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold">
+                Minhas Candidaturas &amp; Vagas Salvas
+              </h2>
+              <p className="text-xs text-slate-400">
+                Acompanhe a etapa de cada processo seletivo (Currículo Enviado,
+                Teste, Entrevista, Proposta) e registre anotações pessoais.
+              </p>
+            </div>
+
+            {data?.jobs.filter(
+              (j) => j.applied || j.saved || j.application_stage
+            ).length === 0 ? (
+              <div className="gupy-subcard py-14 text-center">
+                <p className="text-sm text-slate-300">
+                  Você ainda não salvou ou iniciou nenhuma candidatura.
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Na aba <strong>Buscar Vagas</strong>, selecione uma etapa ou
+                  favorite uma vaga para acompanhá-la aqui.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {data?.jobs
+                  .filter((j) => j.applied || j.saved || j.application_stage)
+                  .map((job) => (
+                    <div
+                      key={job.id}
+                      className="gupy-job-card space-y-3 p-4.5"
+                    >
+                      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="gupy-badge px-2.5 py-0.5 text-[11px]">
+                              {job.source_name}
+                            </span>
+                            <span className="gupy-btn-primary px-2.5 py-0.5 text-[11px]">
+                              {APPLICATION_STAGES.find(
+                                (s) =>
+                                  s.value ===
+                                  (job.application_stage ||
+                                    (job.applied ? "enviado" : "salva"))
+                              )?.label || "Salva"}
+                            </span>
+                          </div>
+                          <h3 className="truncate font-semibold">
+                            {job.title}
+                          </h3>
+                          <p className="text-xs text-slate-400">
+                            {job.company} • {job.location || "Não informado"}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={
+                              job.application_stage ||
+                              (job.applied ? "enviado" : "salva")
+                            }
+                            onChange={(e) => {
+                              const stage = e.target.value;
+                              handleToggleJobFlag(job.id, {
+                                application_stage: stage,
+                                applied: Boolean(stage && stage !== "salva"),
+                              });
+                            }}
+                            className="px-2.5 py-2 text-xs"
+                          >
+                            {APPLICATION_STAGES.map((st) => (
+                              <option key={st.value} value={st.value}>
+                                {st.label}
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingNoteId(
+                                editingNoteId === job.id ? null : job.id
+                              );
+                              setNoteDraft(job.notes || "");
+                            }}
+                            className="gupy-btn-secondary px-3 py-2 text-xs"
+                          >
+                            {job.notes ? "Editar Anotação" : "+ Anotação"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPitchJob(job)}
+                            className="gupy-btn-secondary px-3 py-2 text-xs"
+                          >
+                            Carta
+                          </button>
+
+                          <a
+                            href={job.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="gupy-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
+                          >
+                            Abrir
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </div>
+                      </div>
+
+                      {job.notes && editingNoteId !== job.id && (
+                        <div className="gupy-subcard p-3 text-xs">
+                          <strong>Suas anotações:</strong> {job.notes}
+                        </div>
+                      )}
+
+                      {editingNoteId === job.id && (
+                        <div className="gupy-subcard space-y-2 p-3">
+                          <textarea
+                            rows={2}
+                            value={noteDraft}
+                            onChange={(e) => setNoteDraft(e.target.value)}
+                            placeholder="Ex: Entrevista marcada para quinta às 14h, salário R$ X, link do teste..."
+                            className="w-full px-3 py-2 text-xs"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingNoteId(null)}
+                              className="gupy-btn-secondary px-3 py-1.5 text-xs"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await handleToggleJobFlag(job.id, {
+                                  notes: noteDraft,
+                                });
+                                setEditingNoteId(null);
+                                showToast("Anotação salva!");
+                              }}
+                              className="gupy-btn-primary px-3 py-1.5 text-xs"
+                            >
+                              Salvar Anotação
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Modal de Carta de Apresentação / Pitch */}
+        {pitchJob && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+            <div className="gupy-card w-full max-w-lg space-y-4 p-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold">
+                  Carta de Apresentação para {pitchJob.company}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setPitchJob(null)}
+                  className="gupy-btn-secondary p-1.5"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
+                Gerada automaticamente cruzando seu currículo com a vaga{" "}
+                <strong>{pitchJob.title}</strong>.
+              </p>
+
+              <textarea
+                readOnly
+                rows={8}
+                value={`Olá, equipe de recrutamento da ${pitchJob.company}!\n\nEstou me candidatando à vaga de ${pitchJob.title}. Meu nome é ${data?.resume?.full_name || data?.user?.name || "Candidato(a)"}${data?.resume?.target_role ? `, atuo na área de ${data.resume.target_role}` : ""} e tenho experiência prática com ${data?.resume?.skills && data.resume.skills.length > 0 ? data.resume.skills.slice(0, 6).join(", ") : "desenvolvimento e tecnologia"}.\n\n${data?.resume?.summary ? `${data.resume.summary}\n\n` : ""}Estou à disposição para conversar e contribuir com os desafios da equipe.${data?.resume?.linkedin_url ? `\nLinkedIn: ${data.resume.linkedin_url}` : ""}${data?.resume?.portfolio_url ? `\nPortfólio/GitHub: ${data.resume.portfolio_url}` : ""}\nContato: ${data?.resume?.email || data?.user?.email || ""}${data?.resume?.phone ? ` | ${data.resume.phone}` : ""}`}
+                className="w-full p-3 text-xs leading-relaxed"
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPitchJob(null)}
+                  className="gupy-btn-secondary px-4 py-2 text-xs"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const modal = (e.currentTarget as HTMLElement).closest(
+                      ".gupy-card"
+                    );
+                    const ta = modal?.querySelector("textarea");
+                    if (ta) {
+                      navigator.clipboard.writeText(ta.value);
+                      showToast("Carta copiada para a área de transferência!");
+                    }
+                  }}
+                  className="gupy-btn-primary px-4 py-2 text-xs"
+                >
+                  Copiar Texto
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

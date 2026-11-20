@@ -112,6 +112,8 @@ export async function ensureSchema(): Promise<void> {
     await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE`;
     await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS saved BOOLEAN NOT NULL DEFAULT FALSE`;
     await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS applied BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_stage TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_external_id_key`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS jobs_user_external_idx ON jobs (COALESCE(user_id, 0), external_id)`;
 
