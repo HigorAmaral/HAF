@@ -95,7 +95,8 @@ export async function runJobMonitorForUser(
           normalizedTerms.some((term) => haystack.includes(term));
         const matchesLoc = matchesLocationFilter(
           `${job.title} ${job.location || ""}`,
-          locationFilter
+          locationFilter,
+          source.name
         );
         return matchesKeyword && matchesLoc;
       });

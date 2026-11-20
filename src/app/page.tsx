@@ -185,6 +185,7 @@ export default function HomePage() {
   const [filterCities, setFilterCities] = useState<string[]>([]);
   const [includeRemote, setIncludeRemote] = useState(true);
   const [workMode, setWorkMode] = useState<WorkModeFilter>("all");
+  const [onlyBrazil, setOnlyBrazil] = useState(true);
   const [cityInput, setCityInput] = useState("");
   const [savingLocation, setSavingLocation] = useState(false);
 
@@ -212,6 +213,7 @@ export default function HomePage() {
       setFilterCities(parsed.locationFilter?.cities || []);
       setIncludeRemote(parsed.locationFilter?.includeRemote ?? true);
       setWorkMode(parsed.locationFilter?.workMode || "all");
+      setOnlyBrazil(parsed.locationFilter?.onlyBrazil ?? true);
       setAuthState("authenticated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
@@ -346,7 +348,8 @@ export default function HomePage() {
     nextState = filterState,
     nextCities = filterCities,
     nextRemote = includeRemote,
-    nextWorkMode = workMode
+    nextWorkMode = workMode,
+    nextOnlyBrazil = onlyBrazil
   ) => {
     setSavingLocation(true);
     try {
@@ -358,6 +361,7 @@ export default function HomePage() {
           filterCities: nextCities,
           includeRemote: nextRemote,
           workMode: nextWorkMode,
+          onlyBrazil: nextOnlyBrazil,
         }),
       });
       if (!res.ok) throw new Error("Erro ao salvar filtro de localização");
@@ -434,6 +438,7 @@ export default function HomePage() {
       cities: filterCities,
       includeRemote,
       workMode,
+      onlyBrazil,
     };
 
     const list = data.jobs.filter((j) => {
@@ -444,7 +449,8 @@ export default function HomePage() {
           .includes(q);
       const matchesLoc = matchesLocationFilter(
         `${j.title} ${j.location || ""}`,
-        locFilter
+        locFilter,
+        j.source_name
       );
       const matchesStatus =
         jobStatusFilter === "all"
@@ -466,7 +472,7 @@ export default function HomePage() {
       const scoreB = resumeTerms.filter((t) => hayB.includes(t)).length;
       return scoreB - scoreA;
     });
-  }, [data?.jobs, search, filterState, filterCities, includeRemote, workMode, jobStatusFilter, resumeTerms]);
+  }, [data?.jobs, search, filterState, filterCities, includeRemote, workMode, onlyBrazil, jobStatusFilter, resumeTerms]);
 
   if (authState === "checking") {
     return (
@@ -704,6 +710,16 @@ export default function HomePage() {
                   ))}
 
                   <label className="ml-2 inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={onlyBrazil}
+                      onChange={(e) => setOnlyBrazil(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 accent-emerald-600"
+                    />
+                    Apenas Brasil
+                  </label>
+
+                  <label className="ml-1 inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-300">
                     <input
                       type="checkbox"
                       checked={includeRemote}

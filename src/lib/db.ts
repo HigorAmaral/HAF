@@ -219,13 +219,14 @@ export async function getLocationFilter(userId: number): Promise<{
   cities: string[];
   includeRemote: boolean;
   workMode: "all" | "remote" | "hybrid" | "onsite";
+  onlyBrazil: boolean;
 }> {
   await ensureSchema();
   const sql = getSql();
   const rows = (await sql`
     SELECT key, value FROM user_settings
     WHERE user_id = ${userId}
-      AND key IN ('filter_state', 'filter_cities', 'include_remote', 'work_mode')
+      AND key IN ('filter_state', 'filter_cities', 'include_remote', 'work_mode', 'only_brazil')
   `) as Array<{ key: string; value: string }>;
 
   const map = new Map(rows.map((r) => [r.key, r.value]));
@@ -249,5 +250,6 @@ export async function getLocationFilter(userId: number): Promise<{
     cities,
     includeRemote: map.get("include_remote") !== "false",
     workMode,
+    onlyBrazil: map.get("only_brazil") !== "false",
   };
 }

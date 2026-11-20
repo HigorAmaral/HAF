@@ -122,6 +122,7 @@ export interface LocationFilter {
   cities: string[]; // até 5 cidades
   includeRemote: boolean;
   workMode?: WorkModeFilter;
+  onlyBrazil?: boolean;
 }
 
 function normalizeText(value: string): string {
@@ -132,10 +133,70 @@ function normalizeText(value: string): string {
     .trim();
 }
 
+const BRAZIL_CITY_NAMES = BRAZIL_STATES.flatMap((s) =>
+  s.cities.map((c) => normalizeText(c))
+);
+const BRAZIL_STATE_NAMES = BRAZIL_STATES.map((s) => normalizeText(s.name));
+
+export function isBrazilJob(jobText: string, sourceName = ""): boolean {
+  const text = normalizeText(`${jobText} ${sourceName}`);
+
+  // Fontes brasileiras garantidas
+  if (
+    /\b(gupy|frontendbr|backendbr|react brasil|qa brasil|vue\.js brasil|php brasil|android dev br|cocoaheads|soujava|\.net dev br)\b/.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  // Menção explícita ao Brasil ou América Latina
+  if (
+    /\b(brasil|brazil|latam|latin america|south america|america latina)\b/.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  // Palavras-chave típicas de vagas em português no Brasil
+  if (
+    /\b(desenvolvedor|engenheiro|analista|estagio|estagiario|vaga|pleno|junior|senior|presencial|hibrido|clt|pj|remoto)\b/.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  // Cidades ou estados brasileiros conhecidos
+  if (BRAZIL_STATE_NAMES.some((st) => text.includes(st))) return true;
+  if (BRAZIL_CITY_NAMES.some((ct) => ct.length >= 5 && text.includes(ct))) {
+    return true;
+  }
+
+  // Vagas remotas globais explícitas ("Worldwide" / "Anywhere") que aceitam brasileiros
+  const isForeignRestricted =
+    /\b(usa|us only|united states|u\.s\.|europe|eu only|emea|uk|united kingdom|london|germany|berlin|munich|france|paris|spain|madrid|canada|toronto|australia|sydney|india|bangalore|singapore|japan|netherlands|amsterdam|poland|austria|switzerland|ireland)\b/.test(
+      text
+    );
+  if (isForeignRestricted) return false;
+
+  if (/\b(worldwide|anywhere|global)\b/.test(text)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function matchesLocationFilter(
   jobText: string,
-  filter: LocationFilter
+  filter: LocationFilter,
+  sourceName = ""
 ): boolean {
+  if (filter.onlyBrazil !== false && !isBrazilJob(jobText, sourceName)) {
+    return false;
+  }
+
   const normalized = normalizeText(jobText);
   const isRemote = /\b(remoto|remote|home office|anywhere|telecommut)\b/.test(normalized);
   const isHybrid = /\b(hibrido|hybrid)\b/.test(normalized);

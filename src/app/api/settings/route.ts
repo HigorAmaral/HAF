@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       filterCities?: string[];
       includeRemote?: boolean;
       workMode?: string;
+      onlyBrazil?: boolean;
     };
 
     if (body.alertEmail !== undefined) {
@@ -73,6 +74,14 @@ export async function POST(req: NextRequest) {
       await sql`
         INSERT INTO user_settings (user_id, key, value, updated_at)
         VALUES (${user.userId}, 'work_mode', ${mode}, NOW())
+        ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `;
+    }
+
+    if (body.onlyBrazil !== undefined) {
+      await sql`
+        INSERT INTO user_settings (user_id, key, value, updated_at)
+        VALUES (${user.userId}, 'only_brazil', ${String(Boolean(body.onlyBrazil))}, NOW())
         ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
       `;
     }

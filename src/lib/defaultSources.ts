@@ -36,6 +36,18 @@ export const DEFAULT_SOURCES: DefaultSourceDef[] = [
   { name: "SouJava (GitHub Vagas)", type: "github_issues", target: "soujava/vagas-java" },
   { name: ".NET Dev BR (GitHub Vagas)", type: "github_issues", target: "dotnetdevbr/vagas" },
 
+  // Grandes Empresas Brasileiras (Gupy)
+  { name: "iFood (Gupy)", type: "gupy", target: "ifood" },
+  { name: "Stone (Gupy)", type: "gupy", target: "stone" },
+  { name: "PicPay (Gupy)", type: "gupy", target: "picpay" },
+  { name: "Ambev Tech (Gupy)", type: "gupy", target: "ambevtech" },
+  { name: "Grupo Boticário (Gupy)", type: "gupy", target: "grupoboticario" },
+  { name: "TOTVS (Gupy)", type: "gupy", target: "totvs" },
+  { name: "XP Inc (Gupy)", type: "gupy", target: "xpinc" },
+  { name: "Banco Inter (Gupy)", type: "gupy", target: "inter" },
+  { name: "Locaweb (Gupy)", type: "gupy", target: "locaweb" },
+  { name: "Magalu (Gupy)", type: "gupy", target: "magazineluiza" },
+
   // Grandes Empresas Tech (APIs Oficiais Greenhouse / Lever / Ashby)
   { name: "Nubank (Greenhouse)", type: "greenhouse", target: "nubank" },
   { name: "Stripe (Greenhouse)", type: "greenhouse", target: "stripe" },
