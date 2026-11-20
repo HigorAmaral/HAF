@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Briefcase,
   Camera,
   Download,
+  Eye,
+  EyeOff,
   FileText,
+  GraduationCap,
   Plus,
   Rocket,
   Save,
@@ -56,6 +60,28 @@ interface ResumeBuilderProps {
   initialResume: DbResumeRow | null;
   onSaved: (message: string, goToJobs?: boolean) => Promise<void>;
 }
+
+const SUGGESTED_SKILLS = [
+  "JavaScript",
+  "TypeScript",
+  "React",
+  "Next.js",
+  "Node.js",
+  "Python",
+  "Django",
+  "Vue",
+  "SQL",
+  "PostgreSQL",
+  "Docker",
+  "Git",
+  "Linux",
+  "AWS",
+  "Tailwind",
+  "Java",
+  "C#",
+  "Excel",
+  "Power BI",
+];
 
 function mapDbToForm(r: DbResumeRow | null): ResumeData {
   return {
@@ -121,6 +147,37 @@ export default function ResumeBuilder({
   const [parsingPdf, setParsingPdf] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Assistente rápido de Experiência
+  const [showExpHelper, setShowExpHelper] = useState(false);
+  const [expCompany, setExpCompany] = useState("");
+  const [expRole, setExpRole] = useState("");
+  const [expPeriod, setExpPeriod] = useState("");
+  const [expDesc, setExpDesc] = useState("");
+
+  // Assistente rápido de Formação
+  const [showEduHelper, setShowEduHelper] = useState(false);
+  const [eduCourse, setEduCourse] = useState("");
+  const [eduSchool, setEduSchool] = useState("");
+  const [eduPeriod, setEduPeriod] = useState("");
+
+  const completeness = useMemo(() => {
+    const checks = [
+      Boolean(form.fullName.trim()),
+      Boolean(form.email.trim()),
+      Boolean(form.targetRole.trim()),
+      Boolean(form.phone.trim() || form.location.trim()),
+      form.skills.length >= 3,
+      Boolean(form.summary.trim()),
+      Boolean(form.experience.trim()),
+      Boolean(form.education.trim()),
+      Boolean(form.linkedinUrl.trim() || form.portfolioUrl.trim()),
+      Boolean(form.photoUrl),
+    ];
+    const done = checks.filter(Boolean).length;
+    return Math.round((done / checks.length) * 100);
+  }, [form]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -186,13 +243,13 @@ export default function ResumeBuilder({
     }
   };
 
-  const addSkill = () => {
-    const term = skillInput.trim();
+  const addSkill = (value?: string) => {
+    const term = (value ?? skillInput).trim();
     if (!term) return;
-    if (!form.skills.includes(term)) {
+    if (!form.skills.some((s) => s.toLowerCase() === term.toLowerCase())) {
       setForm((prev) => ({ ...prev, skills: [...prev.skills, term] }));
     }
-    setSkillInput("");
+    if (!value) setSkillInput("");
   };
 
   const removeSkill = (skill: string) => {
@@ -200,6 +257,51 @@ export default function ResumeBuilder({
       ...prev,
       skills: prev.skills.filter((s) => s !== skill),
     }));
+  };
+
+  const handleInsertExperience = () => {
+    if (!expCompany.trim() && !expRole.trim()) return;
+    const header = [expCompany.trim(), expRole.trim(), expPeriod.trim()]
+      .filter(Boolean)
+      .join(" — ");
+    const bullets = expDesc
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+      .join("\n");
+    const block = [header, bullets].filter(Boolean).join("\n");
+    setForm((prev) => ({
+      ...prev,
+      experience: prev.experience.trim()
+        ? `${prev.experience.trim()}\n\n${block}`
+        : block,
+    }));
+    setExpCompany("");
+    setExpRole("");
+    setExpPeriod("");
+    setExpDesc("");
+    setShowExpHelper(false);
+  };
+
+  const handleInsertEducation = () => {
+    if (!eduCourse.trim() && !eduSchool.trim()) return;
+    const block = [
+      eduCourse.trim(),
+      [eduSchool.trim(), eduPeriod.trim()].filter(Boolean).join(" | "),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    setForm((prev) => ({
+      ...prev,
+      education: prev.education.trim()
+        ? `${prev.education.trim()}\n\n${block}`
+        : block,
+    }));
+    setEduCourse("");
+    setEduSchool("");
+    setEduPeriod("");
+    setShowEduHelper(false);
   };
 
   const submitResume = async (autoSearch: boolean) => {
@@ -216,7 +318,7 @@ export default function ResumeBuilder({
 
       if (autoSearch && json.scrapeResult) {
         await onSaved(
-          `Currículo salvo! Varremos todas as fontes: ${json.scrapeResult.jobsFound} vagas compatíveis encontradas (${json.scrapeResult.newJobsCount} novas).`,
+          `Currículo salvo! Varremos ${json.scrapeResult.sourcesChecked} fontes: ${json.scrapeResult.jobsFound} vagas compatíveis (${json.scrapeResult.newJobsCount} novas).`,
           true
         );
       } else {
@@ -234,33 +336,53 @@ export default function ResumeBuilder({
 
   return (
     <div className="space-y-6">
-      {/* Upload PDF */}
-      <section className="flex flex-col justify-between gap-4 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-6 sm:flex-row sm:items-center">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-indigo-300">
-            <Sparkles className="h-5 w-5" />
-            <h2 className="text-base font-semibold">
-              Auto-preencher com seu Currículo em PDF
-            </h2>
+      {/* Barra de Completude + Upload PDF */}
+      <div className="grid gap-4 lg:grid-cols-12">
+        <section className="flex flex-col justify-between gap-4 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-5 sm:flex-row sm:items-center lg:col-span-8">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-indigo-300">
+              <Sparkles className="h-5 w-5" />
+              <h2 className="text-base font-semibold">
+                Importar PDF ou Construir Manualmente
+              </h2>
+            </div>
+            <p className="text-xs text-slate-400">
+              Envie seu currículo atual em PDF para preencher automaticamente ou
+              edite abaixo e exporte um novo PDF profissional.
+            </p>
           </div>
-          <p className="text-xs text-slate-400">
-            Envie seu PDF para preencher os campos automaticamente ou monte seu
-            currículo abaixo e gere um novo PDF profissional.
-          </p>
-        </div>
 
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500">
-          <Upload className="h-4 w-4" />
-          {parsingPdf ? "Lendo PDF..." : "Importar PDF"}
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={handlePdfUpload}
-            disabled={parsingPdf}
-            className="hidden"
-          />
-        </label>
-      </section>
+          <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500">
+            <Upload className="h-4 w-4" />
+            {parsingPdf ? "Lendo PDF..." : "Importar PDF"}
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={handlePdfUpload}
+              disabled={parsingPdf}
+              className="hidden"
+            />
+          </label>
+        </section>
+
+        <section className="flex flex-col justify-center rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-4">
+          <div className="mb-2 flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-300">
+              Completude do currículo
+            </span>
+            <span className="font-bold text-emerald-400">{completeness}%</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300"
+              style={{ width: `${completeness}%` }}
+            />
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Quanto mais completo, melhor o match automático com as vagas.
+          </p>
+        </section>
+      </div>
 
       {feedback && (
         <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
@@ -270,21 +392,114 @@ export default function ResumeBuilder({
 
       {/* Formulário Construtor Completo */}
       <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-emerald-400" />
             <h2 className="text-lg font-semibold">Construtor de Currículo</h2>
           </div>
 
-          <button
-            type="button"
-            onClick={() => downloadProfessionalResumePdf(form)}
-            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-4 py-2 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/25"
-          >
-            <Download className="h-4 w-4" />
-            Gerar Currículo em PDF
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
+            >
+              {showPreview ? (
+                <>
+                  <EyeOff className="h-4 w-4" />
+                  Ocultar Prévia
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4" />
+                  Pré-visualizar
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => downloadProfessionalResumePdf(form)}
+              className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-4 py-2 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/25"
+            >
+              <Download className="h-4 w-4" />
+              Gerar Currículo em PDF
+            </button>
+          </div>
         </div>
+
+        {/* Prévia ao vivo estilo A4 */}
+        {showPreview && (
+          <div className="mb-6 overflow-hidden rounded-xl border border-slate-700 bg-white text-slate-800 shadow-xl">
+            <div className="flex items-center gap-5 bg-slate-900 px-6 py-5 text-white">
+              {form.photoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={form.photoUrl}
+                  alt="Foto"
+                  className="h-20 w-20 rounded-lg border border-white/20 object-cover"
+                />
+              )}
+              <div>
+                <h3 className="text-xl font-bold">
+                  {form.fullName || "Seu Nome Completo"}
+                </h3>
+                <p className="text-sm text-slate-300">
+                  {[form.targetRole, form.seniority, form.workModel]
+                    .filter(Boolean)
+                    .join("  |  ") || "Cargo desejado"}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  {[form.email, form.phone, form.location]
+                    .filter(Boolean)
+                    .join("   |   ")}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-4 p-6 text-sm">
+              {form.summary && (
+                <div>
+                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                    Resumo Profissional
+                  </h4>
+                  <p className="mt-2 whitespace-pre-line text-slate-700">
+                    {form.summary}
+                  </p>
+                </div>
+              )}
+              {form.skills.length > 0 && (
+                <div>
+                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                    Habilidades e Tecnologias
+                  </h4>
+                  <p className="mt-2 text-slate-700">
+                    {form.skills.join("  |  ")}
+                  </p>
+                </div>
+              )}
+              {form.experience && (
+                <div>
+                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                    Experiência Profissional
+                  </h4>
+                  <p className="mt-2 whitespace-pre-line text-slate-700">
+                    {form.experience}
+                  </p>
+                </div>
+              )}
+              {form.education && (
+                <div>
+                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                    Formação Acadêmica
+                  </h4>
+                  <p className="mt-2 whitespace-pre-line text-slate-700">
+                    {form.education}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Foto + Dados Pessoais */}
         <div className="mb-6 flex flex-col items-start gap-5 rounded-xl border border-slate-800 bg-slate-950/50 p-4 sm:flex-row sm:items-center">
@@ -421,7 +636,7 @@ export default function ResumeBuilder({
               type="text"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              placeholder="(11) 99999-9999"
+              placeholder="(47) 99999-9999"
               className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
             />
           </div>
@@ -434,7 +649,7 @@ export default function ResumeBuilder({
               type="text"
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
-              placeholder="Ex: São Paulo, SP"
+              placeholder="Ex: Joinville, SC"
               className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
             />
           </div>
@@ -470,9 +685,9 @@ export default function ResumeBuilder({
           </div>
         </div>
 
-        {/* Habilidades */}
-        <div className="mt-5">
-          <label className="mb-1 block text-xs text-slate-400">
+        {/* Habilidades + Sugestões 1 clique */}
+        <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+          <label className="mb-1 block text-xs font-medium text-slate-300">
             Habilidades / Tecnologias (usadas para buscar vagas automaticamente)
           </label>
           <div className="flex gap-2">
@@ -491,7 +706,7 @@ export default function ResumeBuilder({
             />
             <button
               type="button"
-              onClick={addSkill}
+              onClick={() => addSkill()}
               className="rounded-lg bg-slate-800 px-3 py-2 text-sm hover:bg-slate-700"
             >
               <Plus className="h-4 w-4" />
@@ -499,11 +714,6 @@ export default function ResumeBuilder({
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            {form.skills.length === 0 && (
-              <span className="text-xs text-slate-500">
-                Nenhuma habilidade adicionada ainda.
-              </span>
-            )}
             {form.skills.map((skill) => (
               <span
                 key={skill}
@@ -520,9 +730,32 @@ export default function ResumeBuilder({
               </span>
             ))}
           </div>
+
+          <div className="mt-3 border-t border-slate-800 pt-3">
+            <p className="mb-2 text-[11px] text-slate-500">
+              Sugestões rápidas (clique para adicionar):
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {SUGGESTED_SKILLS.filter(
+                (s) =>
+                  !form.skills.some(
+                    (cur) => cur.toLowerCase() === s.toLowerCase()
+                  )
+              ).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => addSkill(s)}
+                  className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 transition hover:border-indigo-500 hover:text-indigo-300"
+                >
+                  + {s}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Resumo, Experiência, Formação, Idiomas e Certificações */}
+        {/* Resumo, Experiência (com assistente), Formação (com assistente) */}
         <div className="mt-5 grid gap-4">
           <div>
             <label className="mb-1 block text-xs text-slate-400">
@@ -538,32 +771,133 @@ export default function ResumeBuilder({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-slate-400">
-                Experiência Profissional
-              </label>
+            {/* Experiência */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-400">
+                  Experiência Profissional
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowExpHelper((v) => !v)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300"
+                >
+                  <Briefcase className="h-3 w-3" />
+                  {showExpHelper ? "Fechar assistente" : "+ Adicionar experiência"}
+                </button>
+              </div>
+
+              {showExpHelper && (
+                <div className="space-y-2 rounded-xl border border-indigo-500/30 bg-slate-950 p-3">
+                  <input
+                    type="text"
+                    value={expCompany}
+                    onChange={(e) => setExpCompany(e.target.value)}
+                    placeholder="Empresa (ex: Tech Corp)"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={expRole}
+                      onChange={(e) => setExpRole(e.target.value)}
+                      placeholder="Cargo"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      value={expPeriod}
+                      onChange={(e) => setExpPeriod(e.target.value)}
+                      placeholder="Período (2023 - 2025)"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={expDesc}
+                    onChange={(e) => setExpDesc(e.target.value)}
+                    placeholder="Atividades (uma por linha)"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleInsertExperience}
+                    className="w-full rounded-lg bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  >
+                    Inserir no campo abaixo
+                  </button>
+                </div>
+              )}
+
               <textarea
-                rows={5}
+                rows={6}
                 value={form.experience}
                 onChange={(e) =>
                   setForm({ ...form, experience: e.target.value })
                 }
-                placeholder="Empresa • Cargo (2023 - Atual)&#10;- Principais entregas e resultados..."
+                placeholder="Empresa — Cargo | 2023 - Atual&#10;- Principais entregas e resultados..."
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
               />
             </div>
 
-            <div>
-              <label className="mb-1 block text-xs text-slate-400">
-                Formação Acadêmica
-              </label>
+            {/* Formação */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-400">
+                  Formação Acadêmica
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowEduHelper((v) => !v)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300"
+                >
+                  <GraduationCap className="h-3 w-3" />
+                  {showEduHelper ? "Fechar assistente" : "+ Adicionar formação"}
+                </button>
+              </div>
+
+              {showEduHelper && (
+                <div className="space-y-2 rounded-xl border border-indigo-500/30 bg-slate-950 p-3">
+                  <input
+                    type="text"
+                    value={eduCourse}
+                    onChange={(e) => setEduCourse(e.target.value)}
+                    placeholder="Curso (ex: Bacharelado em Sistemas)"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={eduSchool}
+                      onChange={(e) => setEduSchool(e.target.value)}
+                      placeholder="Instituição"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      value={eduPeriod}
+                      onChange={(e) => setEduPeriod(e.target.value)}
+                      placeholder="Conclusão / Em andamento"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleInsertEducation}
+                    className="w-full rounded-lg bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                  >
+                    Inserir no campo abaixo
+                  </button>
+                </div>
+              )}
+
               <textarea
-                rows={5}
+                rows={6}
                 value={form.education}
                 onChange={(e) =>
                   setForm({ ...form, education: e.target.value })
                 }
-                placeholder="Curso • Instituição (Conclusão)"
+                placeholder="Curso&#10;Instituição | Ano"
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
               />
             </div>

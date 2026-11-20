@@ -6,7 +6,9 @@ import {
   Bookmark,
   Briefcase,
   CheckCircle2,
+  Clock,
   Database,
+  Download,
   ExternalLink,
   FileText,
   Filter,
@@ -165,6 +167,7 @@ export default function HomePage() {
   const [jobStatusFilter, setJobStatusFilter] = useState<
     "all" | "saved" | "applied" | "pending"
   >("all");
+  const [sortBy, setSortBy] = useState<"match" | "recent">("match");
 
   // Form nova fonte
   const [sourceName, setSourceName] = useState("");
@@ -409,6 +412,37 @@ export default function HomePage() {
     await fetchDashboard();
   };
 
+  const handleClearNonFavorites = async () => {
+    await fetch("/api/jobs/clear", { method: "DELETE" });
+    showToast("Vagas não favoritas/não candidatadas removidas.");
+    await fetchDashboard();
+  };
+
+  const handleExportCsv = () => {
+    if (filteredJobs.length === 0) return;
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const rows = [
+      ["Título", "Empresa", "Local", "Fonte", "Favorita", "Candidatada", "URL"],
+      ...filteredJobs.map((j) => [
+        esc(j.title),
+        esc(j.company),
+        esc(j.location || "Não informado"),
+        esc(j.source_name),
+        j.saved ? "Sim" : "Não",
+        j.applied ? "Sim" : "Não",
+        esc(j.url),
+      ]),
+    ];
+    const csv = "\uFEFF" + rows.map((r) => r.join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vagas-haf.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const selectedStateObj = useMemo(
     () => BRAZIL_STATES.find((s) => s.uf === filterState) || null,
     [filterState]
@@ -463,7 +497,7 @@ export default function HomePage() {
       return matchesSearch && matchesLoc && matchesStatus;
     });
 
-    if (resumeTerms.length === 0) return list;
+    if (sortBy === "recent" || resumeTerms.length === 0) return list;
 
     return [...list].sort((a, b) => {
       const hayA = `${a.title} ${a.company} ${a.location || ""}`.toLowerCase();
@@ -472,7 +506,7 @@ export default function HomePage() {
       const scoreB = resumeTerms.filter((t) => hayB.includes(t)).length;
       return scoreB - scoreA;
     });
-  }, [data?.jobs, search, filterState, filterCities, includeRemote, workMode, onlyBrazil, jobStatusFilter, resumeTerms]);
+  }, [data?.jobs, search, filterState, filterCities, includeRemote, workMode, onlyBrazil, jobStatusFilter, sortBy, resumeTerms]);
 
   if (authState === "checking") {
     return (
@@ -662,18 +696,49 @@ export default function HomePage() {
               </div>
 
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Filtrar por cargo, empresa ou fonte..."
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500"
+                  />
+                </div>
 
-              <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Filtrar por cargo, empresa ou fonte..."
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={sortBy}
+                    onChange={(e) =>
+                      setSortBy(e.target.value as "match" | "recent")
+                    }
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500"
+                  >
+                    <option value="match">Ordenar: Maior Match</option>
+                    <option value="recent">Ordenar: Mais Recentes</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    disabled={filteredJobs.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-40"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Exportar CSV
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearNonFavorites}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-400 transition hover:text-rose-300"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Limpar não favoritas
+                  </button>
+                </div>
               </div>
-            </div>
 
             {/* Filtro por Estado e até 5 Cidades */}
             <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
@@ -1255,6 +1320,51 @@ export default function HomePage() {
                 </section>
               </div>
             </div>
+
+            {/* Histórico de Varreduras */}
+            <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Clock className="h-4 w-4 text-indigo-400" />
+                <h2 className="font-semibold">
+                  Histórico de Varreduras ({data?.runs.length ?? 0})
+                </h2>
+              </div>
+
+              {(!data?.runs || data.runs.length === 0) ? (
+                <p className="text-xs text-slate-500">
+                  Nenhuma varredura executada ainda.
+                </p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.runs.map((run) => (
+                    <div
+                      key={run.id}
+                      className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-slate-200">
+                          {new Date(run.started_at).toLocaleString("pt-BR")}
+                        </span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
+                            run.status === "success"
+                              ? "bg-emerald-500/15 text-emerald-300"
+                              : run.status === "partial"
+                                ? "bg-amber-500/15 text-amber-300"
+                                : "bg-rose-500/15 text-rose-300"
+                          }`}
+                        >
+                          {run.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-slate-400">
+                        {run.jobs_found} compatíveis • {run.new_jobs} nova(s)
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         )}
       </main>
