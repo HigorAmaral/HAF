@@ -138,9 +138,11 @@ export default function ResumeBuilder({
   const [form, setForm] = useState<ResumeData>(() => mapDbToForm(initialResume));
 
   useEffect(() => {
-    if (initialResume) {
+    if (!initialResume) return;
+    const rafId = requestAnimationFrame(() => {
       setForm(mapDbToForm(initialResume));
-    }
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [initialResume]);
 
   const [skillInput, setSkillInput] = useState("");

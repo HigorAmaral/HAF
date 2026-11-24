@@ -22,12 +22,15 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("reset_token");
-    if (token) {
-      setResetToken(token);
-      setMode("reset");
-    }
+    const rafId = requestAnimationFrame(() => {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("reset_token");
+      if (token) {
+        setResetToken(token);
+        setMode("reset");
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,29 +92,32 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center px-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-[var(--bg-page)] px-4 py-8 text-[var(--text-primary)]">
       <div className="gupy-card relative w-full max-w-md space-y-6 p-8">
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between">
+          <span className="indeed-badge px-2.5 py-1 text-[11px]">
+            Portal de Vagas
+          </span>
           <ThemeToggle />
         </div>
         <div className="flex flex-col items-center text-center">
-          <div className="gupy-btn-primary mb-3 flex h-12 w-12 items-center justify-center rounded-2xl">
+          <div className="indeed-btn-primary mb-3 flex h-12 w-12 items-center justify-center rounded-xl shadow-sm">
             <Briefcase className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
             HAF — Monitor de Vagas
           </h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             {mode === "forgot"
               ? "Informe seu e-mail para receber o link de recuperação."
               : mode === "reset"
                 ? "Crie uma nova senha para sua conta."
-                : "Entre ou crie sua conta para montar seu currículo e buscar vagas em todas as fontes."}
+                : "Entre ou crie sua conta para montar seu currículo e buscar vagas em mais de 65 fontes."}
           </p>
         </div>
 
         {(mode === "login" || mode === "register") && (
-          <div className="grid grid-cols-2 rounded-xl border border-slate-800 bg-slate-950 p-1">
+          <div className="grid grid-cols-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-subtle)] p-1">
             <button
               type="button"
               onClick={() => {
@@ -119,10 +125,10 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
                 setError(null);
                 setSuccessMsg(null);
               }}
-              className={`rounded-lg py-2 text-sm font-medium transition ${
+              className={`rounded-lg py-2 text-sm font-semibold transition ${
                 mode === "login"
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "indeed-btn-primary shadow-xs"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               Entrar
@@ -134,10 +140,10 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
                 setError(null);
                 setSuccessMsg(null);
               }}
-              className={`rounded-lg py-2 text-sm font-medium transition ${
+              className={`rounded-lg py-2 text-sm font-semibold transition ${
                 mode === "register"
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "indeed-btn-primary shadow-xs"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               Criar Conta
@@ -146,13 +152,13 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
         )}
 
         {error && (
-          <div className="rounded-xl border border-rose-500/40 bg-rose-950/60 px-4 py-3 text-sm text-rose-200">
+          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-200">
             {error}
           </div>
         )}
 
         {successMsg && (
-          <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/50 px-4 py-3 text-sm text-emerald-200">
+          <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
             {successMsg}
           </div>
         )}
@@ -223,7 +229,7 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-500 disabled:opacity-50"
+            className="indeed-btn-primary w-full py-2.5 text-sm shadow-sm disabled:opacity-50"
           >
             {loading
               ? "Processando..."
@@ -246,7 +252,7 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
                 setError(null);
                 setSuccessMsg(null);
               }}
-              className="text-indigo-400 hover:underline"
+              className="font-semibold text-[var(--accent-bg)] hover:underline"
             >
               Esqueci minha senha
             </button>
@@ -259,15 +265,15 @@ export default function AuthGate({ onAuthenticated }: AuthGateProps) {
                 setError(null);
                 setSuccessMsg(null);
               }}
-              className="text-slate-400 hover:text-slate-200 hover:underline"
+              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
             >
               ← Voltar para o login
             </button>
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-2 border-t border-slate-800 pt-4 text-xs text-slate-500">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+        <div className="flex items-center justify-center gap-2 border-t border-[var(--border-color)] pt-4 text-xs text-[var(--text-muted)]">
+          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           <span>Senha protegida com Scrypt + Sessão assinada HTTP-only</span>
         </div>
       </div>

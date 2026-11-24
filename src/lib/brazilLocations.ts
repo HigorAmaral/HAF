@@ -141,9 +141,9 @@ const BRAZIL_STATE_NAMES = BRAZIL_STATES.map((s) => normalizeText(s.name));
 export function isBrazilJob(jobText: string, sourceName = ""): boolean {
   const text = normalizeText(`${jobText} ${sourceName}`);
 
-  // Fontes brasileiras garantidas
+  // Fontes brasileiras garantidas e empresas brasileiras conhecidas
   if (
-    /\b(gupy|frontendbr|backendbr|react brasil|qa brasil|vue\.js brasil|php brasil|android dev br|cocoaheads|soujava|\.net dev br)\b/.test(
+    /\b(gupy|frontendbr|backendbr|react brasil|qa brasil|vue\.js brasil|php brasil|android dev br|cocoaheads|soujava|\.net dev br|vtex|ebanx|gympass|wellhub|nubank|mercadolivre|mercado livre|itau|btgpactual|pagbank|c6bank|rdstation|hotmart|quintoandar|creditas|globo|sicoob|ifood|stone|picpay|totvs|magalu|magazineluiza|xpinc|locaweb|ambev|grupoboticario|inter)\b/.test(
       text
     )
   ) {

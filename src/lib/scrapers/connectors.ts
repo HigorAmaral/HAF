@@ -607,6 +607,146 @@ async function scrapeWorkingNomads(): Promise<ScrapedJob[]> {
   }));
 }
 
+async function scrapeSmartRecruiters(target: string): Promise<ScrapedJob[]> {
+  const slug = target
+    .replace(/^https?:\/\/(jobs|careers)\.smartrecruiters\.com\//i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+  const res = await fetchWithTimeout(
+    `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(slug)}/postings?limit=50`
+  );
+  const data = (await res.json()) as {
+    content?: Array<{
+      id: string;
+      name: string;
+      company?: { name?: string };
+      location?: {
+        city?: string;
+        region?: string;
+        country?: string;
+        remote?: boolean;
+      };
+      releasedDate?: string;
+    }>;
+  };
+
+  return (data.content ?? [])
+    .filter((job) => job.id && job.name)
+    .map((job) => {
+      const locParts = [job.location?.city, job.location?.region, job.location?.country]
+        .filter(Boolean)
+        .join(", ");
+      const location = job.location?.remote
+        ? locParts
+          ? `${locParts} (Remoto)`
+          : "Remoto"
+        : locParts || "Não informado";
+
+      return {
+        externalId: `sr:${slug}:${job.id}`,
+        title: job.name,
+        company: job.company?.name || slug,
+        location,
+        url: `https://jobs.smartrecruiters.com/${encodeURIComponent(slug)}/${encodeURIComponent(job.id)}`,
+        publishedAt: job.releasedDate,
+      };
+    });
+}
+
+async function scrapeRecruitee(target: string): Promise<ScrapedJob[]> {
+  const slug = target
+    .replace(/^https?:\/\//i, "")
+    .replace(/\.recruitee\.com.*$/i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+  const res = await fetchWithTimeout(
+    `https://${encodeURIComponent(slug)}.recruitee.com/api/offers/`
+  );
+  const data = (await res.json()) as {
+    offers?: Array<{
+      id: number | string;
+      title: string;
+      company_name?: string;
+      location?: string;
+      city?: string;
+      country?: string;
+      remote?: boolean;
+      careers_url?: string;
+      published_at?: string;
+      created_at?: string;
+    }>;
+  };
+
+  return (data.offers ?? [])
+    .filter((job) => job.title)
+    .map((job) => {
+      const locParts = job.location || [job.city, job.country].filter(Boolean).join(", ");
+      const location = job.remote
+        ? locParts
+          ? `${locParts} (Remoto)`
+          : "Remoto"
+        : locParts || "Não informado";
+
+      return {
+        externalId: `recruitee:${slug}:${job.id}`,
+        title: job.title,
+        company: job.company_name || slug,
+        location,
+        url: job.careers_url || `https://${encodeURIComponent(slug)}.recruitee.com/o/${job.id}`,
+        publishedAt: job.published_at || job.created_at,
+      };
+    });
+}
+
+async function scrapeBreezy(target: string): Promise<ScrapedJob[]> {
+  const slug = target
+    .replace(/^https?:\/\//i, "")
+    .replace(/\.breezy\.hr.*$/i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+  const res = await fetchWithTimeout(
+    `https://${encodeURIComponent(slug)}.breezy.hr/json`
+  );
+  const data = (await res.json()) as Array<{
+    id: string;
+    name: string;
+    company?: { name?: string };
+    location?: {
+      name?: string;
+      city?: string;
+      country?: { name?: string };
+      is_remote?: boolean;
+    };
+    url: string;
+    published_date?: string;
+  }>;
+
+  return (data ?? [])
+    .filter((job) => job.name && job.url)
+    .map((job) => {
+      const locParts =
+        job.location?.name ||
+        [job.location?.city, job.location?.country?.name].filter(Boolean).join(", ");
+      const location = job.location?.is_remote
+        ? locParts
+          ? `${locParts} (Remoto)`
+          : "Remoto"
+        : locParts || "Não informado";
+
+      return {
+        externalId: `breezy:${slug}:${job.id}`,
+        title: job.name,
+        company: job.company?.name || slug,
+        location,
+        url: job.url,
+        publishedAt: job.published_date,
+      };
+    });
+}
+
 export async function runSourceConnector(source: SourceRecord): Promise<ScrapedJob[]> {
   switch (source.type) {
     case "remotive":
@@ -631,6 +771,12 @@ export async function runSourceConnector(source: SourceRecord): Promise<ScrapedJ
       return scrapeAshby(source.target);
     case "workable":
       return scrapeWorkable(source.target);
+    case "smartrecruiters":
+      return scrapeSmartRecruiters(source.target);
+    case "recruitee":
+      return scrapeRecruitee(source.target);
+    case "breezy":
+      return scrapeBreezy(source.target);
     case "gupy":
       return scrapeGupy(source.target);
     case "github_issues":
