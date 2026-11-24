@@ -1504,7 +1504,7 @@ export default function HomePage() {
         {activeTab === "jobs" && (
           <div className="space-y-5">
             {/* Barra de Busca Dupla Flutuante Estilo Indeed */}
-            <section className="mx-auto max-w-5xl space-y-3 pt-2">
+            <section className="mx-auto max-w-6xl space-y-3 pt-2">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -1902,7 +1902,7 @@ export default function HomePage() {
             </section>
 
             {/* Indeed Master-Detail Split View */}
-            <div ref={jobsListAnchorRef} className="mx-auto max-w-5xl">
+            <div ref={jobsListAnchorRef} className="mx-auto max-w-6xl">
               {filteredJobs.length === 0 ? (
                 <div className="gupy-card border-dashed py-16 text-center">
                   <p className="text-base font-semibold text-[var(--text-primary)]">
@@ -1930,9 +1930,9 @@ export default function HomePage() {
                   )}
                 </div>
               ) : (
-                <div className="grid items-start gap-6 lg:grid-cols-12">
+                <div className="grid items-start gap-6 lg:grid-cols-[430px_minmax(0,1fr)]">
                   {/* Coluna Esquerda: Saudação + Chips + Vagas para você */}
-                  <div className="space-y-4 lg:col-span-5">
+                  <div className="min-w-0 space-y-4">
                     <div className="space-y-2.5">
                       <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
                         Olá, {firstName}
@@ -2031,6 +2031,9 @@ export default function HomePage() {
                           job.created_at,
                           nowMs
                         );
+                        const showSourceInFooter =
+                          job.source_name.trim().toLowerCase() !==
+                          job.company.trim().toLowerCase();
 
                         return (
                           <article
@@ -2039,7 +2042,7 @@ export default function HomePage() {
                               setSelectedJobId(job.id);
                               setMobileDetailOpen(true);
                             }}
-                            className={`cursor-pointer p-4 ${
+                            className={`cursor-pointer p-4 sm:p-[18px] ${
                               isSelected
                                 ? "indeed-job-card-selected"
                                 : "indeed-job-card"
@@ -2057,10 +2060,10 @@ export default function HomePage() {
                                   {job.title}
                                 </h3>
 
-                                <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">
+                                <p className="mt-1 truncate text-xs font-medium text-[var(--text-secondary)]">
                                   {job.company}
                                 </p>
-                                <p className="truncate text-xs text-[var(--text-secondary)]">
+                                <p className="line-clamp-1 text-xs text-[var(--text-secondary)]">
                                   {job.location || "Local não informado"}
                                 </p>
                               </div>
@@ -2131,7 +2134,9 @@ export default function HomePage() {
 
                             <div className="mt-2.5 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
                               <span>
-                                {job.source_name} · {rel.label}
+                                {showSourceInFooter
+                                  ? `${job.source_name} · ${rel.label}`
+                                  : rel.label}
                               </span>
                               {(job.application_stage || job.applied) && (
                                 <span className="font-semibold text-[var(--accent-bg)]">
@@ -2162,9 +2167,9 @@ export default function HomePage() {
                   </div>
 
                   {/* Coluna Direita: Painel Fixo de Detalhes (Desktop) */}
-                  <div className="hidden lg:sticky lg:top-20 lg:col-span-7 lg:block">
+                  <div className="hidden min-w-0 lg:sticky lg:top-[76px] lg:block lg:self-start">
                     {selectedJob ? (
-                      <div className="indeed-detail-pane max-h-[calc(100vh-6.5rem)] overflow-y-auto p-6">
+                      <div className="indeed-detail-pane indeed-scroll max-h-[calc(100vh-6rem)] min-h-[520px] overflow-y-auto p-6">
                         {renderJobDetailContent(selectedJob)}
                       </div>
                     ) : (
