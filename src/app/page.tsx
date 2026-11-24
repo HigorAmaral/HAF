@@ -5,11 +5,10 @@ import {
   Bell,
   Bookmark,
   Briefcase,
-  Building2,
   Calendar,
+  Check,
   CheckCircle2,
   Clock,
-  Copy,
   Download,
   ExternalLink,
   FileText,
@@ -24,9 +23,12 @@ import {
   RefreshCw,
   Search,
   Send,
+  Share2,
   SlidersHorizontal,
   Sparkles,
+  ThumbsDown,
   Trash2,
+  User,
   X,
   XCircle,
 } from "lucide-react";
@@ -960,6 +962,14 @@ export default function HomePage() {
     });
   }, [sourcesList, sourceSearch, sourceTypeFilter]);
 
+  const newJobsTodayCount = useMemo(() => {
+    if (!jobsList || nowMs <= 0) return 0;
+    return jobsList.filter((j) => nowMs - getEffectiveDateMs(j) < 24 * 3600000)
+      .length;
+  }, [jobsList, nowMs]);
+
+  const firstName = (data?.user?.name?.trim() || "Candidato").split(/\s+/)[0];
+
   if (authState === "checking") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-sm font-medium text-[var(--text-secondary)]">
@@ -992,97 +1002,82 @@ export default function HomePage() {
 
     return (
       <div className="space-y-5">
-        {/* Cabeçalho do Detalhe */}
-        <div className="space-y-4 border-b border-[var(--border-color)] pb-5">
-          <div className="flex items-start gap-3.5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--accent-soft)] text-base font-bold uppercase text-[var(--accent-bg)]">
-              {(job.company || "V").trim().charAt(0)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {rel.isNew && (
-                  <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
-                    Nova
-                  </span>
-                )}
-                <span className="indeed-badge px-2 py-0.5 text-[11px]">
-                  {job.source_name}
-                </span>
-                <span className="text-[11px] text-[var(--text-muted)]">
-                  · {rel.label}
-                </span>
-              </div>
-              <h2 className="mt-1.5 text-xl font-bold leading-snug text-[var(--text-primary)]">
-                {job.title}
-              </h2>
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--text-secondary)]">
-                <span className="inline-flex items-center gap-1 font-semibold text-[var(--text-primary)]">
-                  <Building2 className="h-3.5 w-3.5 text-[var(--accent-bg)]" />
-                  {job.company}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  {job.location || "Local não informado"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Tags estruturadas */}
-          <div className="flex flex-wrap gap-1.5">
-            <span className="indeed-badge px-2.5 py-1 text-xs">
-              {badges.mode}
+        {/* Cabeçalho do Detalhe Estilo Indeed */}
+        <div className="space-y-3 border-b border-[var(--border-color)] pb-5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {rel.isNew && (
+              <span className="indeed-easy-badge">Nova · Candidate-se facilmente</span>
+            )}
+            {!rel.isNew && (
+              <span className="indeed-easy-badge">Candidate-se facilmente</span>
+            )}
+            <span className="text-[11px] text-[var(--text-muted)]">
+              · {rel.label}
             </span>
-            {badges.seniority && (
-              <span className="indeed-badge px-2.5 py-1 text-xs">
-                {badges.seniority}
-              </span>
-            )}
-            {badges.contract && (
-              <span className="indeed-badge px-2.5 py-1 text-xs">
-                {badges.contract}
-              </span>
-            )}
-            {matchedTerms.length > 0 && (
-              <span className="indeed-match-badge px-2.5 py-1 text-xs">
-                {matchPct}% compatível ({matchedTerms.length} skills)
-              </span>
-            )}
           </div>
 
-          {/* Ações Principais estilo Indeed */}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <h2 className="text-xl font-bold leading-snug text-[var(--text-primary)]">
+            {job.title}
+          </h2>
+
+          <div className="space-y-0.5 text-sm">
+            <a
+              href={`https://www.google.com/search?q=${encodeURIComponent(`site:glassdoor.com.br "${job.company}"`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-[var(--text-primary)] underline decoration-[var(--border-strong)] underline-offset-2 hover:text-[var(--accent-bg)]"
+              title="Ver empresa e avaliações no Glassdoor"
+            >
+              <span>{job.company}</span>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+            <p className="text-xs text-[var(--text-secondary)]">
+              {job.location || "Local não informado"}
+            </p>
+            <p className="text-xs text-[var(--text-secondary)]">
+              {badges.mode}
+              {badges.contract ? ` · Efetivo ${badges.contract}` : ""}
+              {badges.seniority ? ` · ${badges.seniority}` : ""}
+              {` · ${job.source_name}`}
+            </p>
+          </div>
+
+          {/* Linha de Ações Estilo Indeed */}
+          <div className="flex flex-wrap items-center gap-2 pt-2">
             <a
               href={job.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="indeed-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-xs"
+              className="indeed-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm"
             >
-              <span>Candidatar-se na fonte</span>
+              <span>Candidatar-se na vaga</span>
               <ExternalLink className="h-4 w-4" />
             </a>
 
             <button
               type="button"
               onClick={() => handleToggleJobFlag(job.id, { saved: !job.saved })}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs ${
-                job.saved ? "indeed-pill-active" : "indeed-btn-secondary"
-              }`}
-              title={job.saved ? "Remover dos favoritos" : "Favoritar vaga"}
+              className={
+                job.saved
+                  ? "indeed-pill-active px-3 py-2.5"
+                  : "indeed-icon-square"
+              }
+              title={job.saved ? "Remover dos favoritos" : "Salvar vaga"}
+              aria-label="Salvar vaga"
             >
               <Bookmark
                 className={`h-4 w-4 ${job.saved ? "fill-current" : ""}`}
               />
-              <span>{job.saved ? "Salva" : "Salvar"}</span>
             </button>
 
             <button
               type="button"
-              onClick={() => openPitchModal(job)}
-              className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs"
+              onClick={() => handleDeleteJob(job.id)}
+              className="indeed-icon-square"
+              title="Não tenho interesse (remover vaga)"
+              aria-label="Dispensar vaga"
             >
-              <FileText className="h-4 w-4 text-[var(--accent-bg)]" />
-              <span>Gerar Carta</span>
+              <ThumbsDown className="h-4 w-4" />
             </button>
 
             <button
@@ -1091,31 +1086,79 @@ export default function HomePage() {
                 navigator.clipboard.writeText(job.url);
                 showToast("Link da vaga copiado!");
               }}
-              className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2.5 text-xs"
-              title="Copiar URL da vaga"
+              className="indeed-icon-square"
+              title="Compartilhar / copiar link"
+              aria-label="Copiar link"
             >
-              <Copy className="h-3.5 w-3.5" />
+              <Share2 className="h-4 w-4" />
             </button>
-
-            <a
-              href={`https://www.google.com/search?q=${encodeURIComponent(`site:glassdoor.com.br "${job.company}"`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="indeed-btn-secondary inline-flex items-center gap-1 px-3 py-2.5 text-xs"
-              title="Pesquisar avaliações da empresa no Glassdoor"
-            >
-              <span>Glassdoor</span>
-              <ExternalLink className="h-3 w-3" />
-            </a>
 
             <button
               type="button"
-              onClick={() => handleDeleteJob(job.id)}
-              className="indeed-btn-secondary ml-auto inline-flex items-center gap-1 px-3 py-2.5 text-xs text-rose-600 hover:border-rose-500/40 dark:text-rose-400"
-              title="Remover vaga"
+              onClick={() => openPitchModal(job)}
+              className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2.5 text-xs"
+              title="Gerar carta de apresentação personalizada"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <FileText className="h-4 w-4 text-[var(--accent-bg)]" />
+              <span>Carta</span>
             </button>
+          </div>
+        </div>
+
+        {/* Dados da vaga (Seção estruturada estilo Indeed) */}
+        <div className="space-y-3 border-b border-[var(--border-color)] pb-5">
+          <h3 className="text-base font-bold text-[var(--text-primary)]">
+            Dados da vaga
+          </h3>
+          <div className="space-y-2.5 text-xs">
+            <div className="flex items-start gap-3">
+              <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-secondary)]" />
+              <div>
+                <p className="font-bold text-[var(--text-primary)]">
+                  Modelo e tipo de vaga
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  <span className="indeed-check-pill">
+                    <Check className="h-3 w-3" /> {badges.mode}
+                  </span>
+                  {badges.contract && (
+                    <span className="indeed-check-pill">
+                      <Check className="h-3 w-3" />{" "}
+                      {badges.contract === "CLT"
+                        ? "Efetivo CLT"
+                        : badges.contract}
+                    </span>
+                  )}
+                  {badges.seniority && (
+                    <span className="indeed-badge px-2 py-0.5 text-[11px]">
+                      {badges.seniority}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-secondary)]" />
+              <div>
+                <p className="font-bold text-[var(--text-primary)]">Local</p>
+                <p className="text-[var(--text-secondary)]">
+                  {job.location || "Local não informado"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Globe className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-secondary)]" />
+              <div>
+                <p className="font-bold text-[var(--text-primary)]">
+                  Fonte monitorada
+                </p>
+                <p className="text-[var(--text-secondary)]">
+                  {job.source_name} · Capturada {rel.label.toLowerCase()}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1156,11 +1199,8 @@ export default function HomePage() {
               {matchedTerms.length > 0 ? (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {matchedTerms.map((term) => (
-                    <span
-                      key={term}
-                      className="rounded-md border border-emerald-500/30 bg-emerald-500/12 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
-                    >
-                      ✓ {term}
+                    <span key={term} className="indeed-check-pill">
+                      <Check className="h-3 w-3" /> {term}
                     </span>
                   ))}
                 </div>
@@ -1239,54 +1279,37 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)]">
-      {/* Top Navbar Estilo Indeed */}
+    <div className="indeed-page-bg min-h-screen text-[var(--text-primary)]">
+      {/* Top Navbar Ultra-Limpa Estilo Indeed */}
       <header className="indeed-navbar sticky top-0 z-30">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-6">
-            {/* Logo */}
+            {/* Logo Wordmark */}
             <button
               type="button"
               onClick={() => setActiveTab("jobs")}
-              className="flex items-center gap-2.5 py-3 text-left"
+              className="flex items-center gap-2 py-3 text-left"
             >
-              <div className="indeed-btn-primary flex h-9 w-9 items-center justify-center rounded-lg">
+              <div className="indeed-btn-primary flex h-8 w-8 items-center justify-center rounded-lg">
                 <Briefcase className="h-4 w-4" />
               </div>
-              <div>
-                <span className="block text-base font-extrabold tracking-tight text-[var(--accent-bg)]">
-                  HAF
-                </span>
-                <span className="hidden text-[10px] font-medium text-[var(--text-muted)] sm:block">
-                  Monitor de Vagas
-                </span>
-              </div>
+              <span className="text-xl font-black tracking-tight text-[var(--accent-bg)]">
+                HAF
+              </span>
             </button>
 
-            {/* Navegação Horizontal Desktop */}
+            {/* Navegação Horizontal Limpa */}
             <nav
               className="hidden items-center gap-1 lg:flex"
               aria-label="Navegação principal"
             >
               {(
                 [
-                  {
-                    id: "jobs",
-                    label: "Buscar vagas",
-                    count: data?.jobs.length ?? 0,
-                  },
-                  {
-                    id: "applications",
-                    label: "Minhas candidaturas",
-                    count: trackedJobs.length,
-                  },
+                  { id: "jobs", label: "Página inicial" },
+                  { id: "applications", label: "Minhas candidaturas" },
                   { id: "resume", label: "Meu currículo" },
-                  {
-                    id: "settings",
-                    label: "Alertas & Fontes",
-                    count: data?.sources.length ?? 0,
-                  },
-                ] as Array<{ id: TabKey; label: string; count?: number }>
+                  { id: "settings", label: "Alertas & Fontes" },
+                ] as Array<{ id: TabKey; label: string }>
               ).map((tab) => {
                 const active = activeTab === tab.id;
                 return (
@@ -1294,37 +1317,70 @@ export default function HomePage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`relative inline-flex items-center gap-2 border-b-2 px-3.5 py-4 text-sm transition ${
+                    className={`border-b-2 px-3 py-4 text-sm transition ${
                       active
-                        ? "border-[var(--accent-bg)] font-bold text-[var(--accent-bg)]"
+                        ? "border-[var(--accent-bg)] font-bold text-[var(--text-primary)]"
                         : "border-transparent font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                     }`}
                   >
-                    <span>{tab.label}</span>
-                    {tab.count !== undefined && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                          active
-                            ? "bg-[var(--accent-soft)] text-[var(--accent-bg)]"
-                            : "bg-[var(--bg-subtle)] text-[var(--text-secondary)]"
-                        }`}
-                      >
-                        {tab.count}
-                      </span>
-                    )}
+                    {tab.label}
                   </button>
                 );
               })}
             </nav>
           </div>
 
-          {/* Ações à Direita */}
-          <div className="flex items-center gap-2 py-2.5">
+          {/* Cluster Direito Estilo Indeed */}
+          <div className="flex items-center gap-1.5 py-2.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("jobs");
+                setJobStatusFilter((prev) =>
+                  prev === "saved" ? "all" : "saved"
+                );
+              }}
+              className={`hidden rounded-lg p-2 transition sm:inline-flex ${
+                jobStatusFilter === "saved" && activeTab === "jobs"
+                  ? "bg-[var(--accent-soft)] text-[var(--accent-bg)]"
+                  : "text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
+              }`}
+              title="Vagas salvas"
+              aria-label="Vagas salvas"
+            >
+              <Bookmark className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleTestNotifications}
+              disabled={testingAlert}
+              className="relative hidden rounded-lg p-2 text-[var(--text-primary)] transition hover:bg-[var(--bg-subtle)] md:inline-flex disabled:opacity-50"
+              title="Testar envio de alertas (Telegram / E-mail)"
+              aria-label="Notificações e alertas"
+            >
+              <Bell className="h-4 w-4" />
+              {newJobsTodayCount > 0 && (
+                <span className="absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold text-white">
+                  {newJobsTodayCount > 99 ? "99+" : newJobsTodayCount}
+                </span>
+              )}
+            </button>
+
+            <ThemeToggle />
+
+            <div className="hidden items-center gap-1.5 px-2 text-xs font-semibold text-[var(--text-primary)] xl:flex">
+              <User className="h-4 w-4 text-[var(--text-secondary)]" />
+              <span className="max-w-[110px] truncate">{firstName}</span>
+            </div>
+
+            <span className="hidden h-5 w-px bg-[var(--border-color)] sm:block" />
+
             <button
               type="button"
               onClick={handleRunScrape}
               disabled={running}
-              className="indeed-btn-primary inline-flex items-center gap-1.5 px-3.5 py-2 text-xs disabled:opacity-50"
+              className="indeed-btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
             >
               {running ? (
                 <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -1332,40 +1388,20 @@ export default function HomePage() {
                 <Play className="h-3.5 w-3.5" />
               )}
               <span className="hidden sm:inline">
-                {running ? "Varrendo fontes..." : "Atualizar Vagas"}
+                {running ? "Varrendo..." : "Atualizar Vagas"}
               </span>
               <span className="sm:hidden">
-                {running ? "Varrendo" : "Buscar"}
+                {running ? "Varrendo" : "Atualizar"}
               </span>
             </button>
-
-            <button
-              type="button"
-              onClick={handleTestNotifications}
-              disabled={testingAlert}
-              className="indeed-btn-secondary hidden items-center gap-1.5 px-3 py-2 text-xs md:inline-flex disabled:opacity-50"
-              title="Testar envio de alertas (Telegram / E-mail)"
-            >
-              <Bell className="h-3.5 w-3.5" />
-              <span>{testingAlert ? "Testando..." : "Testar Alertas"}</span>
-            </button>
-
-            <ThemeToggle />
-
-            <div className="hidden items-center gap-2 border-l border-[var(--border-color)] pl-2 xl:flex">
-              <span className="max-w-[130px] truncate text-xs font-semibold text-[var(--text-secondary)]">
-                {data?.user?.name || "Usuário"}
-              </span>
-            </div>
 
             <button
               type="button"
               onClick={handleLogout}
-              className="indeed-btn-secondary hidden items-center gap-1.5 px-3 py-2 text-xs sm:inline-flex"
+              className="hidden rounded-lg px-2.5 py-2 text-xs font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] sm:inline-flex"
               title="Sair da conta"
             >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Sair</span>
+              <LogOut className="h-4 w-4" />
             </button>
 
             <button
@@ -1466,9 +1502,9 @@ export default function HomePage() {
 
         {/* ==================== ABA 1: BUSCAR VAGAS (ESTILO INDEED) ==================== */}
         {activeTab === "jobs" && (
-          <div className="space-y-4">
-            {/* Barra de Busca Dupla Estilo Indeed ("O quê" + "Onde" + Botão "Achar vagas") */}
-            <section className="mx-auto max-w-5xl space-y-3 pt-1">
+          <div className="space-y-5">
+            {/* Barra de Busca Dupla Flutuante Estilo Indeed */}
+            <section className="mx-auto max-w-5xl space-y-3 pt-2">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -1478,14 +1514,11 @@ export default function HomePage() {
                     block: "nearest",
                   });
                 }}
-                className="indeed-search-shell flex flex-col items-stretch overflow-hidden sm:flex-row sm:items-center"
+                className="indeed-search-shell mx-auto flex max-w-3xl flex-col items-stretch overflow-hidden sm:flex-row sm:items-center"
               >
-                {/* Campo "O quê" */}
+                {/* Campo Cargo / Palavra-chave */}
                 <div className="flex flex-1 items-center gap-2.5 px-4 py-3">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-[var(--text-primary)]">
-                    O quê
-                  </span>
-                  <Search className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                  <Search className="h-4 w-4 shrink-0 text-[var(--text-secondary)]" />
                   <input
                     type="text"
                     value={search}
@@ -1493,7 +1526,7 @@ export default function HomePage() {
                       setSearch(e.target.value);
                       setVisibleLimit(30);
                     }}
-                    placeholder="Cargo, skill, tecnologia ou empresa..."
+                    placeholder="Cargo, palavras-chave ou empresa"
                     className="indeed-raw-input w-full border-none bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
                   />
                   {search && (
@@ -1508,12 +1541,9 @@ export default function HomePage() {
                   )}
                 </div>
 
-                {/* Campo "Onde" */}
+                {/* Campo Onde */}
                 <div className="flex flex-1 items-center gap-2.5 border-t border-[var(--border-color)] px-4 py-3 sm:border-t-0 sm:border-l">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-[var(--text-primary)]">
-                    Onde
-                  </span>
-                  <MapPin className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                  <MapPin className="h-4 w-4 shrink-0 text-[var(--text-secondary)]" />
                   <input
                     type="text"
                     list="indeed-where-suggestions"
@@ -1522,7 +1552,7 @@ export default function HomePage() {
                       setWhereQuery(e.target.value);
                       setVisibleLimit(30);
                     }}
-                    placeholder="Cidade, estado ou 'Remoto'..."
+                    placeholder="Cidade, estado ou Remoto"
                     className="indeed-raw-input w-full border-none bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
                   />
                   <datalist id="indeed-where-suggestions">
@@ -1532,6 +1562,7 @@ export default function HomePage() {
                     <option value="Rio de Janeiro" />
                     <option value="Belo Horizonte" />
                     <option value="Curitiba" />
+                    <option value="Joinville" />
                     <option value="Florianópolis" />
                     <option value="Porto Alegre" />
                     <option value="Recife" />
@@ -1553,15 +1584,15 @@ export default function HomePage() {
                 <div className="p-2">
                   <button
                     type="submit"
-                    className="indeed-btn-primary w-full px-6 py-2.5 text-sm sm:w-auto"
+                    className="indeed-btn-primary w-full px-5 py-2.5 text-sm sm:w-auto"
                   >
                     Achar vagas
                   </button>
                 </div>
               </form>
 
-              {/* Faixa Horizontal de Filtros Estilo Indeed */}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* Faixa Horizontal Compacta de Filtros */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
                 <div className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs">
                   <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                   <select
@@ -1870,228 +1901,281 @@ export default function HomePage() {
               )}
             </section>
 
-            {/* Barra de Resultados & Ações */}
-            <div
-              ref={jobsListAnchorRef}
-              className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-color)] pt-4"
-            >
-              <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-                <span>
-                  Exibindo{" "}
-                  <strong className="text-[var(--text-primary)]">
-                    {filteredJobs.length}
-                  </strong>{" "}
-                  de {data?.jobs.length ?? 0} vagas
-                </span>
-                {data?.resume?.target_role && (
-                  <span className="indeed-match-badge px-2 py-0.5 text-[11px]">
-                    Currículo: {data.resume.target_role}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="px-2.5 py-1.5 text-xs font-semibold"
-                  aria-label="Ordenar vagas"
-                >
-                  <option value="match">Ordenar: Relevância (Match)</option>
-                  <option value="recent">Ordenar: Mais recentes</option>
-                  <option value="company">Ordenar: Empresa (A–Z)</option>
-                </select>
-
-                <button
-                  type="button"
-                  onClick={handleExportCsv}
-                  disabled={filteredJobs.length === 0}
-                  className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-40"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>CSV</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleClearNonFavorites}
-                  className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Limpar não favoritas</span>
-                </button>
-              </div>
-            </div>
-
             {/* Indeed Master-Detail Split View */}
-            {filteredJobs.length === 0 ? (
-              <div className="gupy-card border-dashed py-16 text-center">
-                <p className="text-base font-semibold text-[var(--text-primary)]">
-                  Nenhuma vaga corresponde aos filtros atuais.
-                </p>
-                <p className="mt-1.5 text-xs text-[var(--text-secondary)]">
-                  Tente limpar os filtros, ajustar seu{" "}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("resume")}
-                    className="font-semibold text-[var(--accent-bg)] underline"
-                  >
-                    Meu Currículo
-                  </button>{" "}
-                  ou clicar em <strong>Atualizar Vagas</strong>.
-                </p>
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    onClick={resetAllFilters}
-                    className="indeed-btn-primary mt-4 px-4 py-2 text-xs"
-                  >
-                    Resetar todos os filtros
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="grid items-start gap-5 lg:grid-cols-12">
-                {/* Coluna Esquerda: Lista de Cards Compactos */}
-                <div className="space-y-2.5 lg:col-span-5">
-                  {visibleJobs.map((job) => {
-                    const isSelected = selectedJob?.id === job.id;
-                    const hay = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
-                    const matchedCount = resumeTerms.filter((t) =>
-                      hay.includes(t)
-                    ).length;
-                    const badges = detectJobBadges(
-                      `${job.title} ${job.location || ""} ${job.source_name}`
-                    );
-                    const rel = formatRelativeTime(
-                      job.published_at,
-                      job.created_at,
-                      nowMs
-                    );
-
-                    return (
-                      <article
-                        key={job.id}
-                        onClick={() => {
-                          setSelectedJobId(job.id);
-                          setMobileDetailOpen(true);
-                        }}
-                        className={`cursor-pointer p-4 ${
-                          isSelected
-                            ? "indeed-job-card-selected"
-                            : "indeed-job-card"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {rel.isNew && (
-                              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">
-                                Nova
-                              </span>
-                            )}
-                            {matchedCount > 0 && (
-                              <span className="indeed-match-badge px-2 py-0.5 text-[10px]">
-                                {matchedCount} match
-                              </span>
-                            )}
-                            <span className="indeed-badge px-2 py-0.5 text-[10px]">
-                              {job.source_name}
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleJobFlag(job.id, { saved: !job.saved });
-                            }}
-                            className={`rounded-lg p-1 transition ${
-                              job.saved
-                                ? "text-[var(--accent-bg)]"
-                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                            }`}
-                            aria-label="Favoritar vaga"
-                            title="Favoritar vaga"
-                          >
-                            <Bookmark
-                              className={`h-4 w-4 ${job.saved ? "fill-current" : ""}`}
-                            />
-                          </button>
-                        </div>
-
-                        <h3 className="mt-1.5 line-clamp-2 text-base font-bold leading-snug text-[var(--text-primary)]">
-                          {job.title}
-                        </h3>
-
-                        <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">
-                          {job.company}
-                        </p>
-                        <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                          <MapPin className="h-3 w-3 shrink-0" />
-                          <span className="truncate">
-                            {job.location || "Local não informado"}
-                          </span>
-                        </p>
-
-                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                          <span className="indeed-badge px-2 py-0.5 text-[10px]">
-                            {badges.mode}
-                          </span>
-                          {badges.seniority && (
-                            <span className="indeed-badge px-2 py-0.5 text-[10px]">
-                              {badges.seniority}
-                            </span>
-                          )}
-                          {badges.contract && (
-                            <span className="indeed-badge px-2 py-0.5 text-[10px]">
-                              {badges.contract}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-2.5 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-                          <span>{rel.label}</span>
-                          {(job.application_stage || job.applied) && (
-                            <span className="font-semibold text-[var(--accent-bg)]">
-                              {APPLICATION_STAGES.find(
-                                (s) =>
-                                  s.value ===
-                                  (job.application_stage ||
-                                    (job.applied ? "enviado" : ""))
-                              )?.label || "Candidatada"}
-                            </span>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })}
-
-                  {filteredJobs.length > visibleLimit && (
+            <div ref={jobsListAnchorRef} className="mx-auto max-w-5xl">
+              {filteredJobs.length === 0 ? (
+                <div className="gupy-card border-dashed py-16 text-center">
+                  <p className="text-base font-semibold text-[var(--text-primary)]">
+                    Nenhuma vaga corresponde aos filtros atuais.
+                  </p>
+                  <p className="mt-1.5 text-xs text-[var(--text-secondary)]">
+                    Tente limpar os filtros, ajustar seu{" "}
                     <button
                       type="button"
-                      onClick={() => setVisibleLimit((v) => v + 30)}
-                      className="indeed-btn-secondary w-full py-2.5 text-xs"
+                      onClick={() => setActiveTab("resume")}
+                      className="font-semibold text-[var(--accent-bg)] underline"
                     >
-                      Carregar mais vagas ({filteredJobs.length - visibleLimit}{" "}
-                      restantes)
+                      Meu Currículo
+                    </button>{" "}
+                    ou clicar em <strong>Atualizar Vagas</strong>.
+                  </p>
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={resetAllFilters}
+                      className="indeed-btn-primary mt-4 px-4 py-2 text-xs"
+                    >
+                      Resetar todos os filtros
                     </button>
                   )}
                 </div>
+              ) : (
+                <div className="grid items-start gap-6 lg:grid-cols-12">
+                  {/* Coluna Esquerda: Saudação + Chips + Vagas para você */}
+                  <div className="space-y-4 lg:col-span-5">
+                    <div className="space-y-2.5">
+                      <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+                        Olá, {firstName}
+                      </h1>
 
-                {/* Coluna Direita: Painel Fixo de Detalhes (Desktop) */}
-                <div className="hidden lg:sticky lg:top-20 lg:col-span-7 lg:block">
-                  {selectedJob ? (
-                    <div className="indeed-detail-pane max-h-[calc(100vh-6.5rem)] overflow-y-auto p-6">
-                      {renderJobDetailContent(selectedJob)}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("resume")}
+                          className="indeed-pill rounded-lg"
+                          title="Editar cargo foco do currículo"
+                        >
+                          <Briefcase className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                          <span>
+                            {data?.resume?.target_role || "Definir cargo alvo"}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setLocationDrawerOpen((v) => !v)}
+                          className="indeed-pill rounded-lg text-[var(--accent-bg)]"
+                          title="Configurar estado e cidades monitoradas"
+                        >
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span>
+                            {filterState
+                              ? `${filterState}${filterCities.length > 0 ? ` · ${filterCities[0]}` : ""}`
+                              : filterCities[0]
+                                ? filterCities[0]
+                                : onlyBrazil
+                                  ? "Adicionar região / cidade..."
+                                  : "Busca Global"}
+                          </span>
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="indeed-detail-pane p-10 text-center text-sm text-[var(--text-secondary)]">
-                      Selecione uma vaga à esquerda para ver detalhes completos.
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div>
+                        <h2 className="text-base font-bold text-[var(--text-primary)]">
+                          Vagas para você
+                        </h2>
+                        <p className="text-[11px] text-[var(--text-muted)]">
+                          {filteredJobs.length} de {data?.jobs.length ?? 0} vagas
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value as SortOption)}
+                          className="px-2 py-1 text-[11px] font-semibold"
+                          aria-label="Ordenar vagas"
+                        >
+                          <option value="match">Relevância</option>
+                          <option value="recent">Mais recentes</option>
+                          <option value="company">Empresa (A–Z)</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={handleExportCsv}
+                          disabled={filteredJobs.length === 0}
+                          className="indeed-btn-secondary inline-flex items-center gap-1 px-2 py-1 text-[11px] disabled:opacity-40"
+                          title="Exportar CSV"
+                        >
+                          <Download className="h-3 w-3" />
+                          CSV
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleClearNonFavorites}
+                          className="indeed-btn-secondary p-1.5"
+                          title="Limpar não favoritas"
+                          aria-label="Limpar não favoritas"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
-                  )}
+
+                    <div className="space-y-3">
+                      {visibleJobs.map((job) => {
+                        const isSelected = selectedJob?.id === job.id;
+                        const hay = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
+                        const matchedCount = resumeTerms.filter((t) =>
+                          hay.includes(t)
+                        ).length;
+                        const badges = detectJobBadges(
+                          `${job.title} ${job.location || ""} ${job.source_name}`
+                        );
+                        const rel = formatRelativeTime(
+                          job.published_at,
+                          job.created_at,
+                          nowMs
+                        );
+
+                        return (
+                          <article
+                            key={job.id}
+                            onClick={() => {
+                              setSelectedJobId(job.id);
+                              setMobileDetailOpen(true);
+                            }}
+                            className={`cursor-pointer p-4 ${
+                              isSelected
+                                ? "indeed-job-card-selected"
+                                : "indeed-job-card"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <span className="indeed-easy-badge">
+                                  {rel.isNew
+                                    ? "Nova · Candidate-se"
+                                    : "Candidate-se facilmente"}
+                                </span>
+
+                                <h3 className="mt-2 line-clamp-2 text-[15px] font-bold leading-snug text-[var(--text-primary)]">
+                                  {job.title}
+                                </h3>
+
+                                <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">
+                                  {job.company}
+                                </p>
+                                <p className="truncate text-xs text-[var(--text-secondary)]">
+                                  {job.location || "Local não informado"}
+                                </p>
+                              </div>
+
+                              {/* Ações verticais estilo Indeed (Salvar + Dispensar) */}
+                              <div className="flex shrink-0 flex-col items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleJobFlag(job.id, {
+                                      saved: !job.saved,
+                                    });
+                                  }}
+                                  className={`rounded-lg p-1.5 transition hover:bg-[var(--bg-subtle)] ${
+                                    job.saved
+                                      ? "text-[var(--accent-bg)]"
+                                      : "text-[var(--text-secondary)]"
+                                  }`}
+                                  aria-label="Salvar vaga"
+                                  title="Salvar vaga"
+                                >
+                                  <Bookmark
+                                    className={`h-4 w-4 ${job.saved ? "fill-current" : ""}`}
+                                  />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteJob(job.id);
+                                  }}
+                                  className="rounded-lg p-1.5 text-[var(--text-secondary)] transition hover:bg-[var(--bg-subtle)] hover:text-rose-600"
+                                  aria-label="Dispensar vaga"
+                                  title="Dispensar vaga"
+                                >
+                                  <ThumbsDown className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Chips verdes estilo Indeed */}
+                            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                              <span className="indeed-check-pill">
+                                <Check className="h-3 w-3" /> {badges.mode}
+                              </span>
+                              {badges.contract && (
+                                <span className="indeed-check-pill">
+                                  <Check className="h-3 w-3" />{" "}
+                                  {badges.contract === "CLT"
+                                    ? "Efetivo CLT"
+                                    : badges.contract}
+                                </span>
+                              )}
+                              {matchedCount > 0 && (
+                                <span className="indeed-check-pill">
+                                  <Check className="h-3 w-3" /> {matchedCount}{" "}
+                                  {matchedCount === 1 ? "skill" : "skills"}
+                                </span>
+                              )}
+                              {badges.seniority && (
+                                <span className="indeed-badge px-2 py-0.5 text-[11px]">
+                                  {badges.seniority}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-2.5 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                              <span>
+                                {job.source_name} · {rel.label}
+                              </span>
+                              {(job.application_stage || job.applied) && (
+                                <span className="font-semibold text-[var(--accent-bg)]">
+                                  {APPLICATION_STAGES.find(
+                                    (s) =>
+                                      s.value ===
+                                      (job.application_stage ||
+                                        (job.applied ? "enviado" : ""))
+                                  )?.label || "Candidatada"}
+                                </span>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+
+                      {filteredJobs.length > visibleLimit && (
+                        <button
+                          type="button"
+                          onClick={() => setVisibleLimit((v) => v + 30)}
+                          className="indeed-btn-secondary w-full py-2.5 text-xs"
+                        >
+                          Carregar mais vagas (
+                          {filteredJobs.length - visibleLimit} restantes)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Coluna Direita: Painel Fixo de Detalhes (Desktop) */}
+                  <div className="hidden lg:sticky lg:top-20 lg:col-span-7 lg:block">
+                    {selectedJob ? (
+                      <div className="indeed-detail-pane max-h-[calc(100vh-6.5rem)] overflow-y-auto p-6">
+                        {renderJobDetailContent(selectedJob)}
+                      </div>
+                    ) : (
+                      <div className="indeed-detail-pane p-10 text-center text-sm text-[var(--text-secondary)]">
+                        Selecione uma vaga à esquerda para ver detalhes completos.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Drawer Mobile para Detalhes da Vaga */}
             {mobileDetailOpen && selectedJob && (
