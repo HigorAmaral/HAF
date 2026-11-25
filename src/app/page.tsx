@@ -11,6 +11,7 @@ import {
   Clock,
   Download,
   ExternalLink,
+  FileJson,
   FileText,
   Filter,
   Globe,
@@ -18,6 +19,7 @@ import {
   Mail,
   MapPin,
   Menu,
+  MessageSquare,
   Play,
   Plus,
   RefreshCw,
@@ -126,6 +128,21 @@ const SOURCE_HELP: Record<
     label: "Breezy HR (ATS)",
     placeholder: "Ex: empresa ou https://empresa.breezy.hr",
     hint: "Informe o subdomínio ou URL no Breezy HR.",
+  },
+  bamboohr: {
+    label: "BambooHR (ATS)",
+    placeholder: "Ex: empresa ou https://empresa.bamboohr.com",
+    hint: "Informe o subdomínio ou URL do portal BambooHR da empresa.",
+  },
+  pinpoint: {
+    label: "Pinpoint (ATS)",
+    placeholder: "Ex: empresa ou https://empresa.pinpointhq.com",
+    hint: "Informe o subdomínio ou URL do portal Pinpoint HQ.",
+  },
+  personio: {
+    label: "Personio (ATS)",
+    placeholder: "Ex: empresa ou https://empresa.jobs.personio.de",
+    hint: "Informe o subdomínio ou URL da página Personio Jobs.",
   },
   github_issues: {
     label: "GitHub Vagas (Issues)",
@@ -306,6 +323,68 @@ function buildPitchText(
   return `Olá, equipe de recrutamento da ${job.company}!\n\nEstou me candidatando à vaga de ${job.title}. Meu nome é ${resume?.full_name || user?.name || "Candidato(a)"}${rolePart} e tenho experiência prática com ${skillsList}.\n\n${summaryPart}Estou à disposição para conversar e contribuir com os desafios da equipe.${linkedinPart}${portfolioPart}\nContato: ${resume?.email || user?.email || ""}${phonePart}`;
 }
 
+const COMMON_TECH_SKILLS = [
+  "React",
+  "Next.js",
+  "TypeScript",
+  "JavaScript",
+  "Node.js",
+  "Python",
+  "Java",
+  "Spring",
+  "C#",
+  ".NET",
+  "Go",
+  "Rust",
+  "PHP",
+  "SQL",
+  "PostgreSQL",
+  "MongoDB",
+  "Docker",
+  "Kubernetes",
+  "AWS",
+  "Azure",
+  "GCP",
+  "GraphQL",
+  "Vue",
+  "Angular",
+  "Flutter",
+  "React Native",
+  "Tailwind",
+  "Linux",
+  "Power BI",
+  "Figma",
+  "DevOps",
+  "QA",
+  "Terraform",
+  "iOS",
+  "Android",
+  "Ruby",
+];
+
+function jobMentionsSkill(hayNorm: string, skill: string): boolean {
+  const escaped = skill.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const rx = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, "i");
+  return rx.test(hayNorm);
+}
+
+function buildRecruiterOutreachText(
+  job: JobRecord,
+  matchedTerms: string[],
+  user?: DashboardData["user"] | null,
+  resume?: DbResumeRow | null
+): string {
+  const name = resume?.full_name || user?.name || "Candidato(a)";
+  const rolePart = resume?.target_role ? ` (${resume.target_role})` : "";
+  const skillText =
+    matchedTerms.length > 0
+      ? ` Tenho vivência com ${matchedTerms.slice(0, 4).join(", ")}.`
+      : "";
+  const linkPart = resume?.linkedin_url || resume?.portfolio_url || "";
+  const linkText = linkPart ? ` Link do meu perfil: ${linkPart}` : "";
+  return `Olá! Tudo bem? Vi a oportunidade de ${job.title} na ${job.company} e tenho interesse em participar do processo. Sou ${name}${rolePart}.${skillText}${linkText}`;
+}
+
 export default function HomePage() {
   const [authState, setAuthState] = useState<
     "checking" | "unauthenticated" | "authenticated"
@@ -355,6 +434,7 @@ export default function HomePage() {
   // Aba Fontes: filtro de fontes
   const [sourceSearch, setSourceSearch] = useState("");
   const [sourceTypeFilter, setSourceTypeFilter] = useState<string>("all");
+  const [bulkSourceAction, setBulkSourceAction] = useState(false);
 
   // Form nova fonte
   const [sourceName, setSourceName] = useState("");
@@ -540,6 +620,64 @@ export default function HomePage() {
     await fetchDashboard();
   };
 
+  const handleQuickAddKeyword = async (term: string) => {
+    try {
+      const res = await fetch("/api/keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ term }),
+      });
+      if (!res.ok) throw new Error("Erro ao adicionar palavra-chave");
+      showToast(`Palavra-chave "${term}" adicionada ao monitor!`);
+      await fetchDashboard();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Erro ao salvar");
+    }
+  };
+
+  const handleBulkSourcesMode = async (mode: "pause_errors" | "enable_all") => {
+    const allSources = data?.sources ?? [];
+    const targets =
+      mode === "pause_errors"
+        ? allSources.filter(
+            (s) =>
+              s.enabled &&
+              Boolean(s.last_status?.toLowerCase().startsWith("erro"))
+          )
+        : allSources.filter((s) => !s.enabled);
+
+    if (targets.length === 0) {
+      showToast(
+        mode === "pause_errors"
+          ? "Nenhuma fonte ativa com erro encontrada."
+          : "Todas as fontes já estão ativas."
+      );
+      return;
+    }
+
+    setBulkSourceAction(true);
+    try {
+      const nextEnabled = mode === "enable_all";
+      await Promise.all(
+        targets.map((src) =>
+          fetch(`/api/sources/${src.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: nextEnabled }),
+          })
+        )
+      );
+      showToast(
+        mode === "pause_errors"
+          ? `${targets.length} fonte(s) com erro pausada(s).`
+          : `${targets.length} fonte(s) reativada(s).`
+      );
+      await fetchDashboard();
+    } finally {
+      setBulkSourceAction(false);
+    }
+  };
+
   const handleDeleteKeyword = async (id: number) => {
     await fetch(`/api/keywords/${id}`, { method: "DELETE" });
     await fetchDashboard();
@@ -613,22 +751,25 @@ export default function HomePage() {
     setFilterCities((prev) => prev.filter((c) => c !== cityName));
   };
 
-  const handleToggleJobFlag = async (
-    jobId: number,
-    patch: {
-      saved?: boolean;
-      applied?: boolean;
-      application_stage?: string;
-      notes?: string;
-    }
-  ) => {
-    await fetch(`/api/jobs/${jobId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    await fetchDashboard();
-  };
+  const handleToggleJobFlag = useCallback(
+    async (
+      jobId: number,
+      patch: {
+        saved?: boolean;
+        applied?: boolean;
+        application_stage?: string;
+        notes?: string;
+      }
+    ) => {
+      await fetch(`/api/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      await fetchDashboard();
+    },
+    [fetchDashboard]
+  );
 
   const handleDeleteJob = async (jobId: number) => {
     await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
@@ -886,6 +1027,74 @@ export default function HomePage() {
     [filteredJobs, selectedJobId]
   );
 
+  useEffect(() => {
+    if (activeTab !== "jobs" || pitchJob || filteredJobs.length === 0) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toUpperCase();
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === "ArrowDown" || e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        const curIdx = selectedJob
+          ? filteredJobs.findIndex((j) => j.id === selectedJob.id)
+          : -1;
+        const nextIdx = Math.min(filteredJobs.length - 1, Math.max(0, curIdx + 1));
+        if (nextIdx >= visibleLimit) {
+          setVisibleLimit((v) => v + 30);
+        }
+        setSelectedJobId(filteredJobs[nextIdx].id);
+        return;
+      }
+
+      if (e.key === "ArrowUp" || e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        const curIdx = selectedJob
+          ? filteredJobs.findIndex((j) => j.id === selectedJob.id)
+          : 0;
+        const prevIdx = Math.max(0, curIdx - 1);
+        setSelectedJobId(filteredJobs[prevIdx].id);
+        return;
+      }
+
+      if (
+        (e.key === "s" || e.key === "S") &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        selectedJob
+      ) {
+        e.preventDefault();
+        const nextSaved = !selectedJob.saved;
+        void handleToggleJobFlag(selectedJob.id, { saved: nextSaved });
+        showToast(
+          nextSaved
+            ? "Vaga salva nos favoritos!"
+            : "Vaga removida das favoritas."
+        );
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    activeTab,
+    pitchJob,
+    filteredJobs,
+    selectedJob,
+    visibleLimit,
+    handleToggleJobFlag,
+    showToast,
+  ]);
+
   const hasActiveFilters = Boolean(
     search.trim() ||
       whereQuery.trim() ||
@@ -925,6 +1134,32 @@ export default function HomePage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportJson = () => {
+    if (filteredJobs.length === 0) return;
+    const payload = filteredJobs.map((j) => ({
+      title: j.title,
+      company: j.company,
+      location: j.location || null,
+      source: j.source_name,
+      saved: Boolean(j.saved),
+      applied: Boolean(j.applied),
+      stage: j.application_stage || null,
+      url: j.url,
+      published_at: j.published_at || null,
+      created_at: j.created_at,
+    }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vagas-haf.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`${payload.length} vaga(s) exportadas em JSON!`);
+  };
+
   const trackedJobs = useMemo(
     () =>
       (jobsList ?? []).filter(
@@ -956,11 +1191,37 @@ export default function HomePage() {
         return NO_TARGET_TYPES.includes(src.type) || src.type === "rss";
       }
       if (sourceTypeFilter === "ats") {
-        return ["greenhouse", "lever", "ashby", "workable", "smartrecruiters", "recruitee", "breezy"].includes(src.type);
+        return [
+          "greenhouse",
+          "lever",
+          "ashby",
+          "workable",
+          "smartrecruiters",
+          "recruitee",
+          "breezy",
+          "bamboohr",
+          "pinpoint",
+          "personio",
+        ].includes(src.type);
+      }
+      if (sourceTypeFilter === "error") {
+        return Boolean(
+          src.last_status && src.last_status.toLowerCase().startsWith("erro")
+        );
       }
       return src.type === sourceTypeFilter;
     });
   }, [sourcesList, sourceSearch, sourceTypeFilter]);
+
+  const sourceHealth = useMemo(() => {
+    const list = sourcesList ?? [];
+    const active = list.filter((s) => s.enabled).length;
+    const paused = list.length - active;
+    const errors = list.filter((s) =>
+      Boolean(s.last_status?.toLowerCase().startsWith("erro"))
+    ).length;
+    return { active, paused, errors };
+  }, [sourcesList]);
 
   const newJobsTodayCount = useMemo(() => {
     if (!jobsList || nowMs <= 0) return 0;
@@ -985,6 +1246,11 @@ export default function HomePage() {
   const renderJobDetailContent = (job: JobRecord) => {
     const hay = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
     const matchedTerms = resumeTerms.filter((t) => hay.includes(t));
+    const missingSkills = COMMON_TECH_SKILLS.filter(
+      (skill) =>
+        jobMentionsSkill(hay, skill) &&
+        !resumeTerms.some((t) => t === skill.toLowerCase())
+    );
     const matchPct =
       resumeTerms.length > 0
         ? Math.min(
@@ -1102,6 +1368,25 @@ export default function HomePage() {
               <FileText className="h-4 w-4 text-[var(--accent-bg)]" />
               <span>Carta</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const msg = buildRecruiterOutreachText(
+                  job,
+                  matchedTerms,
+                  data?.user,
+                  data?.resume
+                );
+                navigator.clipboard.writeText(msg);
+                showToast("Mensagem rápida para recrutador copiada!");
+              }}
+              className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2.5 text-xs"
+              title="Copiar mensagem curta de abordagem para LinkedIn / WhatsApp"
+            >
+              <MessageSquare className="h-4 w-4 text-[var(--accent-bg)]" />
+              <span>Msg Recrutador</span>
+            </button>
           </div>
         </div>
 
@@ -1208,6 +1493,38 @@ export default function HomePage() {
                 <p className="mt-2 text-xs text-[var(--text-secondary)]">
                   Nenhuma skill do currículo aparece diretamente no título/local desta vaga.
                 </p>
+              )}
+              {missingSkills.length > 0 && (
+                <div className="mt-3 border-t border-[var(--border-color)] pt-2.5">
+                  <p className="mb-1.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+                    Skills citadas na vaga que não estão no seu currículo:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {missingSkills.map((skill) => {
+                      const alreadyKw = (data?.keywords ?? []).some(
+                        (k) => k.term.toLowerCase() === skill.toLowerCase()
+                      );
+                      return (
+                        <button
+                          key={skill}
+                          type="button"
+                          disabled={alreadyKw}
+                          onClick={() => void handleQuickAddKeyword(skill)}
+                          className="indeed-badge inline-flex items-center gap-1 px-2 py-0.5 text-[11px] transition hover:border-[var(--accent-ring)] hover:text-[var(--accent-bg)] disabled:opacity-50"
+                          title={
+                            alreadyKw
+                              ? `${skill} já está nas suas palavras-chave monitoradas`
+                              : `Adicionar ${skill} às palavras-chave do monitor`
+                          }
+                        >
+                          <Plus className="h-3 w-3" />
+                          {skill}
+                          {alreadyKw ? " (monitorada)" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -1981,7 +2298,14 @@ export default function HomePage() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className="hidden rounded border border-[var(--border-color)] bg-[var(--bg-subtle)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)] xl:inline-flex"
+                          title="Use ↑ / ↓ (ou J / K) para trocar de vaga e S para salvar"
+                        >
+                          ↑↓ navegar · S salvar
+                        </span>
+
                         <select
                           value={sortBy}
                           onChange={(e) => setSortBy(e.target.value as SortOption)}
@@ -2002,6 +2326,17 @@ export default function HomePage() {
                         >
                           <Download className="h-3 w-3" />
                           CSV
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleExportJson}
+                          disabled={filteredJobs.length === 0}
+                          className="indeed-btn-secondary inline-flex items-center gap-1 px-2 py-1 text-[11px] disabled:opacity-40"
+                          title="Exportar JSON"
+                        >
+                          <FileJson className="h-3 w-3" />
+                          JSON
                         </button>
 
                         <button
@@ -2758,6 +3093,41 @@ export default function HomePage() {
                     </button>
                   </div>
 
+                  {/* Saúde das Fontes & Ações em Massa */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-subtle)] px-3 py-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="indeed-check-pill">
+                        {sourceHealth.active} ativas
+                      </span>
+                      <span className="indeed-badge px-2 py-0.5 text-[11px]">
+                        {sourceHealth.paused} pausadas
+                      </span>
+                      {sourceHealth.errors > 0 && (
+                        <span className="rounded-md bg-rose-500/15 px-2 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                          {sourceHealth.errors} com erro
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={bulkSourceAction || sourceHealth.errors === 0}
+                        onClick={() => handleBulkSourcesMode("pause_errors")}
+                        className="indeed-btn-secondary px-2.5 py-1 text-[11px] disabled:opacity-40"
+                      >
+                        Pausar com erro
+                      </button>
+                      <button
+                        type="button"
+                        disabled={bulkSourceAction || sourceHealth.paused === 0}
+                        onClick={() => handleBulkSourcesMode("enable_all")}
+                        className="indeed-btn-secondary px-2.5 py-1 text-[11px] disabled:opacity-40"
+                      >
+                        Ativar todas
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Busca e Filtro das Fontes */}
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <div className="relative flex-1">
@@ -2777,9 +3147,10 @@ export default function HomePage() {
                     >
                       <option value="all">Todos os tipos</option>
                       <option value="gupy">Gupy (Brasil)</option>
-                      <option value="ats">Greenhouse / Lever / Ashby / SmartRecruiters</option>
+                      <option value="ats">Greenhouse / Lever / Ashby / SmartRecruiters / +ATS</option>
                       <option value="github_issues">GitHub Vagas</option>
                       <option value="global">APIs Globais &amp; RSS</option>
+                      <option value="error">Com erro na última varredura</option>
                     </select>
                   </div>
 

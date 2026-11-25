@@ -747,6 +747,135 @@ async function scrapeBreezy(target: string): Promise<ScrapedJob[]> {
     });
 }
 
+async function scrapeBambooHR(target: string): Promise<ScrapedJob[]> {
+  const slug = target
+    .replace(/^https?:\/\//i, "")
+    .replace(/\.bamboohr\.com.*$/i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+  const res = await fetchWithTimeout(
+    `https://${encodeURIComponent(slug)}.bamboohr.com/careers/list`
+  );
+  const data = (await res.json()) as {
+    result?: Array<{
+      id: string | number;
+      jobOpeningName: string;
+      location?: { city?: string; state?: string; country?: string };
+      isRemote?: boolean | number | string | null;
+      datePosted?: string;
+    }>;
+  };
+
+  return (data.result ?? [])
+    .filter((job) => job.id && job.jobOpeningName)
+    .map((job) => {
+      const locParts = [
+        job.location?.city,
+        job.location?.state,
+        job.location?.country,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      const isRemote =
+        job.isRemote === true || job.isRemote === 1 || job.isRemote === "1";
+      const location = isRemote
+        ? locParts
+          ? `${locParts} (Remoto)`
+          : "Remoto"
+        : locParts || "Não informado";
+
+      return {
+        externalId: `bamboo:${slug}:${job.id}`,
+        title: job.jobOpeningName,
+        company: slug,
+        location,
+        url: `https://${encodeURIComponent(slug)}.bamboohr.com/careers/${encodeURIComponent(String(job.id))}`,
+        publishedAt: job.datePosted,
+      };
+    });
+}
+
+async function scrapePinpoint(target: string): Promise<ScrapedJob[]> {
+  const slug = target
+    .replace(/^https?:\/\//i, "")
+    .replace(/\.pinpointhq\.com.*$/i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+  const res = await fetchWithTimeout(
+    `https://${encodeURIComponent(slug)}.pinpointhq.com/postings.json`
+  );
+  const data = (await res.json()) as {
+    data?: Array<{
+      id: string | number;
+      title: string;
+      url: string;
+      workplace_type?: string;
+      workplace_type_text?: string;
+      location?: { name?: string; city?: string; country?: string };
+      created_at?: string;
+    }>;
+  };
+
+  return (data.data ?? [])
+    .filter((job) => job.title && job.url)
+    .map((job) => {
+      const baseLoc =
+        job.location?.name ||
+        [job.location?.city, job.location?.country].filter(Boolean).join(", ") ||
+        job.workplace_type_text ||
+        job.workplace_type ||
+        "Não informado";
+      const isRemote = job.workplace_type === "remote";
+      const location =
+        isRemote && !/remot/i.test(baseLoc) ? `${baseLoc} (Remoto)` : baseLoc;
+
+      return {
+        externalId: `pinpoint:${slug}:${job.id}`,
+        title: job.title,
+        company: slug,
+        location,
+        url: job.url,
+        publishedAt: job.created_at,
+      };
+    });
+}
+
+async function scrapePersonio(target: string): Promise<ScrapedJob[]> {
+  const slug = target
+    .replace(/^https?:\/\//i, "")
+    .replace(/\.jobs\.personio\.(de|com).*$/i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+  const res = await fetchWithTimeout(
+    `https://${encodeURIComponent(slug)}.jobs.personio.de/xml`
+  );
+  const xml = await res.text();
+  const $ = cheerio.load(xml, { xmlMode: true });
+  const jobs: ScrapedJob[] = [];
+
+  $("position").each((_, el) => {
+    const id = $(el).find("id").first().text().trim();
+    const title = $(el).find("name").first().text().trim();
+    const office = $(el).find("office").first().text().trim();
+    const createdAt = $(el).find("createdAt").first().text().trim();
+    if (!id || !title) return;
+
+    jobs.push({
+      externalId: `personio:${slug}:${id}`,
+      title,
+      company: slug,
+      location: office || "Não informado",
+      url: `https://${encodeURIComponent(slug)}.jobs.personio.de/job/${encodeURIComponent(id)}`,
+      publishedAt: createdAt || undefined,
+    });
+  });
+
+  return jobs;
+}
+
 export async function runSourceConnector(source: SourceRecord): Promise<ScrapedJob[]> {
   switch (source.type) {
     case "remotive":
@@ -777,6 +906,12 @@ export async function runSourceConnector(source: SourceRecord): Promise<ScrapedJ
       return scrapeRecruitee(source.target);
     case "breezy":
       return scrapeBreezy(source.target);
+    case "bamboohr":
+      return scrapeBambooHR(source.target);
+    case "pinpoint":
+      return scrapePinpoint(source.target);
+    case "personio":
+      return scrapePersonio(source.target);
     case "gupy":
       return scrapeGupy(source.target);
     case "github_issues":

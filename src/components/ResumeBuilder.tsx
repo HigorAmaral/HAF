@@ -4,9 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Briefcase,
   Camera,
+  Check,
+  CheckCircle2,
   Download,
   Eye,
   EyeOff,
+  FileJson,
   FileText,
   GraduationCap,
   Plus,
@@ -15,8 +18,13 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Wand2,
 } from "lucide-react";
-import { downloadProfessionalResumePdf } from "@/lib/generateResumePdf";
+import {
+  downloadProfessionalResumePdf,
+  downloadResumeTxt,
+  type ResumePdfTemplate,
+} from "@/lib/generateResumePdf";
 
 export interface ResumeData {
   fullName: string;
@@ -61,26 +69,98 @@ interface ResumeBuilderProps {
   onSaved: (message: string, goToJobs?: boolean) => Promise<void>;
 }
 
-const SUGGESTED_SKILLS = [
-  "JavaScript",
-  "TypeScript",
-  "React",
-  "Next.js",
-  "Node.js",
-  "Python",
-  "Django",
-  "Vue",
-  "SQL",
-  "PostgreSQL",
-  "Docker",
-  "Git",
-  "Linux",
-  "AWS",
-  "Tailwind",
-  "Java",
-  "C#",
-  "Excel",
-  "Power BI",
+const SKILL_CATEGORIES: Record<string, string[]> = {
+  Frontend: [
+    "JavaScript",
+    "TypeScript",
+    "React",
+    "Next.js",
+    "Vue",
+    "Angular",
+    "Tailwind",
+    "HTML/CSS",
+    "React Native",
+  ],
+  Backend: [
+    "Node.js",
+    "Python",
+    "Django",
+    "FastAPI",
+    "Java",
+    "Spring Boot",
+    "C#",
+    ".NET",
+    "Go",
+    "PHP",
+    "GraphQL",
+  ],
+  "Dados & IA": [
+    "SQL",
+    "PostgreSQL",
+    "MongoDB",
+    "Power BI",
+    "Excel",
+    "Pandas",
+    "Machine Learning",
+    "LLM / IA",
+    "Spark",
+  ],
+  "Cloud & DevOps": [
+    "Docker",
+    "Kubernetes",
+    "AWS",
+    "Azure",
+    "GCP",
+    "Git",
+    "Linux",
+    "CI/CD",
+    "Terraform",
+  ],
+  "Produto & Design": [
+    "Figma",
+    "UI/UX Design",
+    "Design System",
+    "Prototipagem",
+    "Product Discovery",
+    "Testes Automatizados",
+    "Cypress",
+    "Playwright",
+  ],
+  Gestão: [
+    "Scrum",
+    "Kanban",
+    "Jira",
+    "Liderança Técnica",
+    "OKRs",
+    "Comunicação",
+  ],
+};
+
+const SKILL_CATEGORY_KEYS = Object.keys(SKILL_CATEGORIES);
+
+const IMPACT_BULLETS: Array<{ label: string; text: string }> = [
+  {
+    label: "+ Redução de tempo/custo",
+    text: "- Reduzi em [X]% o tempo de processamento / custos operacionais por meio de otimização e automação.",
+  },
+  {
+    label: "+ Arquitetura / Escalabilidade",
+    text: "- Projetei e implementei arquitetura escalável atendendo [X] mil usuários com foco em performance e testes.",
+  },
+  {
+    label: "+ Liderança / Mentoria",
+    text: "- Colaborei com squad multidisciplinar conduzindo code reviews, alinhamento técnico e mentoria de equipe.",
+  },
+];
+
+const TEMPLATE_OPTIONS: Array<{
+  id: ResumePdfTemplate;
+  label: string;
+  desc: string;
+}> = [
+  { id: "executivo", label: "Executivo", desc: "Cabeçalho escuro + foto" },
+  { id: "moderno", label: "Moderno Azul", desc: "Azul Indeed + destaque" },
+  { id: "ats", label: "ATS Puro", desc: "Branco P&B p/ robôs (Gupy/Indeed)" },
 ];
 
 function mapDbToForm(r: DbResumeRow | null): ResumeData {
@@ -146,6 +226,10 @@ export default function ResumeBuilder({
   }, [initialResume]);
 
   const [skillInput, setSkillInput] = useState("");
+  const [activeSkillCategory, setActiveSkillCategory] =
+    useState<string>("Frontend");
+  const [pdfTemplate, setPdfTemplate] =
+    useState<ResumePdfTemplate>("executivo");
   const [parsingPdf, setParsingPdf] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -164,21 +248,85 @@ export default function ResumeBuilder({
   const [eduSchool, setEduSchool] = useState("");
   const [eduPeriod, setEduPeriod] = useState("");
 
-  const completeness = useMemo(() => {
-    const checks = [
-      Boolean(form.fullName.trim()),
-      Boolean(form.email.trim()),
-      Boolean(form.targetRole.trim()),
-      Boolean(form.phone.trim() || form.location.trim()),
-      form.skills.length >= 3,
-      Boolean(form.summary.trim()),
-      Boolean(form.experience.trim()),
-      Boolean(form.education.trim()),
-      Boolean(form.linkedinUrl.trim() || form.portfolioUrl.trim()),
-      Boolean(form.photoUrl),
-    ];
-    const done = checks.filter(Boolean).length;
-    return Math.round((done / checks.length) * 100);
+  const atsAnalysis = useMemo(() => {
+    let score = 0;
+    const tips: string[] = [];
+
+    const hasIdentity =
+      Boolean(form.fullName.trim()) && Boolean(form.email.trim());
+    if (hasIdentity) {
+      score += 15;
+    } else {
+      tips.push("Preencha nome completo e e-mail");
+    }
+
+    if (form.phone.trim() && form.location.trim()) {
+      score += 10;
+    } else {
+      tips.push("Informe telefone e cidade/estado");
+    }
+
+    if (form.targetRole.trim()) {
+      score += 10;
+    } else {
+      tips.push("Defina seu cargo desejado");
+    }
+
+    if (form.skills.length >= 6) {
+      score += 15;
+    } else if (form.skills.length >= 1) {
+      score += 8;
+      tips.push(`Adicione pelo menos ${6 - form.skills.length} skill(s)`);
+    } else {
+      tips.push("Adicione 6+ habilidades técnicas");
+    }
+
+    const summaryLen = form.summary.trim().length;
+    if (summaryLen >= 120 && summaryLen <= 600) {
+      score += 15;
+    } else if (summaryLen > 0) {
+      score += 7;
+      tips.push(
+        summaryLen < 120
+          ? "Expanda o resumo para 120–600 caracteres"
+          : "Enxugue o resumo para até 600 caracteres"
+      );
+    } else {
+      tips.push("Escreva (ou gere) um resumo profissional");
+    }
+
+    const expTrimmed = form.experience.trim();
+    if (expTrimmed && /\d/.test(expTrimmed)) {
+      score += 15;
+    } else if (expTrimmed) {
+      score += 8;
+      tips.push("Inclua números/métricas de resultado na experiência");
+    } else {
+      tips.push("Adicione sua experiência ou projetos");
+    }
+
+    if (form.education.trim()) {
+      score += 10;
+    } else {
+      tips.push("Adicione formação acadêmica ou cursos");
+    }
+
+    if (form.linkedinUrl.trim() || form.portfolioUrl.trim()) {
+      score += 5;
+    } else {
+      tips.push("Inclua LinkedIn ou GitHub/Portfólio");
+    }
+
+    if (form.languages.trim() || form.certifications.trim()) {
+      score += 5;
+    } else {
+      tips.push("Adicione idiomas ou certificações");
+    }
+
+    const badge =
+      score >= 85 ? "Excelente" : score >= 65 ? "Bom" : "Em construção";
+
+    return { score, tips, badge };
   }, [form]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -245,6 +393,100 @@ export default function ResumeBuilder({
     }
   };
 
+  const handleExportJsonBackup = () => {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      resume: form,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "curriculo-haf-backup.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    setFeedback("Backup JSON do currículo exportado!");
+  };
+
+  const handleRestoreJsonBackup = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as {
+        resume?: Partial<ResumeData>;
+      } & Partial<ResumeData>;
+      const src = parsed.resume || parsed;
+      setForm((prev) => ({
+        fullName: typeof src.fullName === "string" ? src.fullName : prev.fullName,
+        email: typeof src.email === "string" ? src.email : prev.email,
+        phone: typeof src.phone === "string" ? src.phone : prev.phone,
+        targetRole:
+          typeof src.targetRole === "string" ? src.targetRole : prev.targetRole,
+        seniority:
+          typeof src.seniority === "string" ? src.seniority : prev.seniority,
+        workModel:
+          typeof src.workModel === "string" ? src.workModel : prev.workModel,
+        location: typeof src.location === "string" ? src.location : prev.location,
+        linkedinUrl:
+          typeof src.linkedinUrl === "string"
+            ? src.linkedinUrl
+            : prev.linkedinUrl,
+        portfolioUrl:
+          typeof src.portfolioUrl === "string"
+            ? src.portfolioUrl
+            : prev.portfolioUrl,
+        skills: Array.isArray(src.skills) ? src.skills.map(String) : prev.skills,
+        summary: typeof src.summary === "string" ? src.summary : prev.summary,
+        experience:
+          typeof src.experience === "string" ? src.experience : prev.experience,
+        education:
+          typeof src.education === "string" ? src.education : prev.education,
+        languages:
+          typeof src.languages === "string" ? src.languages : prev.languages,
+        certifications:
+          typeof src.certifications === "string"
+            ? src.certifications
+            : prev.certifications,
+        photoUrl: typeof src.photoUrl === "string" ? src.photoUrl : prev.photoUrl,
+      }));
+      setFeedback("Currículo restaurado a partir do backup JSON!");
+    } catch {
+      setFeedback("Arquivo JSON inválido para restauração.");
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const handleGenerateSummarySuggestion = () => {
+    const rolePart = form.targetRole.trim() || "Desenvolvedor(a) de Software";
+    const seniorityPart = form.seniority.trim()
+      ? ` de nível ${form.seniority.trim()}`
+      : "";
+    const locationPart = form.location.trim()
+      ? ` com base em ${form.location.trim()}`
+      : "";
+    const workPart = form.workModel.trim()
+      ? ` e disponibilidade para atuação ${form.workModel.trim().toLowerCase()}`
+      : "";
+    const topSkills = form.skills.slice(0, 6).join(", ");
+    const skillsSentence = topSkills
+      ? ` Experiência prática com ${topSkills}, entregando soluções escaláveis, código limpo e foco em resultados mensuráveis.`
+      : " Foco em entregas escaláveis, boas práticas de engenharia e colaboração contínua com produto e tecnologia.";
+
+    const suggestion = `Profissional atuando como ${rolePart}${seniorityPart}${locationPart}${workPart}.${skillsSentence} Busco novos desafios onde possa gerar impacto rápido no produto e evoluir tecnicamente com a equipe.`;
+
+    setForm((prev) => ({ ...prev, summary: suggestion }));
+    setFeedback(
+      "Sugestão de resumo gerada! Você pode personalizar números e detalhes antes de salvar."
+    );
+  };
+
   const addSkill = (value?: string) => {
     const term = (value ?? skillInput).trim();
     if (!term) return;
@@ -258,6 +500,15 @@ export default function ResumeBuilder({
     setForm((prev) => ({
       ...prev,
       skills: prev.skills.filter((s) => s !== skill),
+    }));
+  };
+
+  const appendImpactBullet = (bulletText: string) => {
+    setForm((prev) => ({
+      ...prev,
+      experience: prev.experience.trim()
+        ? `${prev.experience.trimEnd()}\n${bulletText}`
+        : bulletText,
     }));
   };
 
@@ -336,132 +587,262 @@ export default function ResumeBuilder({
     }
   };
 
+  const selectedTemplateMeta =
+    TEMPLATE_OPTIONS.find((t) => t.id === pdfTemplate) || TEMPLATE_OPTIONS[0];
+  const categorySkills = SKILL_CATEGORIES[activeSkillCategory] || [];
+
   return (
-    <div className="space-y-6">
-      {/* Barra de Completude + Upload PDF */}
+    <div className="mx-auto max-w-6xl space-y-6">
+      {/* Barra Superior: Importação + ATS Score */}
       <div className="grid gap-4 lg:grid-cols-12">
-        <section className="flex flex-col justify-between gap-4 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-5 sm:flex-row sm:items-center lg:col-span-8">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-indigo-300">
+        <section className="gupy-card flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center lg:col-span-7">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-[var(--accent-bg)]">
               <Sparkles className="h-5 w-5" />
-              <h2 className="text-base font-semibold">
-                Importar PDF ou Construir Manualmente
+              <h2 className="text-base font-bold text-[var(--text-primary)]">
+                Estúdio de Currículo Profissional &amp; ATS
               </h2>
             </div>
-            <p className="text-xs text-slate-400">
-              Envie seu currículo atual em PDF para preencher automaticamente ou
-              edite abaixo e exporte um novo PDF profissional.
+            <p className="text-xs text-[var(--text-secondary)]">
+              Importe seu PDF atual ou restaure um backup JSON, otimize para
+              filtros ATS (Gupy, Indeed, Greenhouse) e exporte em 3 modelos.
             </p>
-          </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <label className="indeed-btn-primary inline-flex cursor-pointer items-center gap-2 px-3.5 py-2 text-xs">
+                <Upload className="h-3.5 w-3.5" />
+                {parsingPdf ? "Lendo PDF..." : "Importar PDF"}
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handlePdfUpload}
+                  disabled={parsingPdf}
+                  className="hidden"
+                />
+              </label>
 
-          <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500">
-            <Upload className="h-4 w-4" />
-            {parsingPdf ? "Lendo PDF..." : "Importar PDF"}
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={handlePdfUpload}
-              disabled={parsingPdf}
-              className="hidden"
-            />
-          </label>
+              <button
+                type="button"
+                onClick={handleExportJsonBackup}
+                className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
+              >
+                <FileJson className="h-3.5 w-3.5 text-[var(--accent-bg)]" />
+                Backup JSON
+              </button>
+
+              <label className="indeed-btn-secondary inline-flex cursor-pointer items-center gap-1.5 px-3 py-2 text-xs">
+                <Upload className="h-3.5 w-3.5" />
+                Restaurar JSON
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleRestoreJsonBackup}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
         </section>
 
-        <section className="flex flex-col justify-center rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-4">
-          <div className="mb-2 flex items-center justify-between text-xs">
-            <span className="font-medium text-slate-300">
-              Completude do currículo
+        {/* Pontuação ATS */}
+        <section className="gupy-card flex flex-col justify-center p-5 lg:col-span-5">
+          <div className="mb-2 flex items-center justify-between gap-2 text-xs">
+            <span className="font-bold text-[var(--text-primary)]">
+              Score ATS do Currículo
             </span>
-            <span className="font-bold text-emerald-400">{completeness}%</span>
+            <div className="flex items-center gap-2">
+              <span className="indeed-check-pill">{atsAnalysis.badge}</span>
+              <span className="text-sm font-black text-[var(--accent-bg)]">
+                {atsAnalysis.score}/100
+              </span>
+            </div>
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-subtle)]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300"
-              style={{ width: `${completeness}%` }}
+              className="h-full rounded-full bg-[var(--accent-bg)] transition-all duration-300"
+              style={{ width: `${Math.max(4, atsAnalysis.score)}%` }}
             />
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">
-            Quanto mais completo, melhor o match automático com as vagas.
-          </p>
+
+          {atsAnalysis.tips.length === 0 ? (
+            <p className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Currículo completo e pronto para sistemas ATS!
+            </p>
+          ) : (
+            <p className="mt-2.5 text-[11px] text-[var(--text-secondary)]">
+              <strong>Para 100/100:</strong>{" "}
+              {atsAnalysis.tips.slice(0, 3).join(" · ")}
+            </p>
+          )}
         </section>
       </div>
 
       {feedback && (
-        <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+        <div className="gupy-card border-l-4 border-l-emerald-500 px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
           {feedback}
         </div>
       )}
 
       {/* Formulário Construtor Completo */}
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <section className="gupy-card p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-color)] pb-4">
           <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-emerald-400" />
-            <h2 className="text-lg font-semibold">Construtor de Currículo</h2>
+            <FileText className="h-5 w-5 text-[var(--accent-bg)]" />
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">
+              Construtor de Currículo
+            </h2>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Seletor de Modelo PDF */}
+            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-subtle)] p-1">
+              {TEMPLATE_OPTIONS.map((tpl) => {
+                const active = pdfTemplate === tpl.id;
+                return (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => setPdfTemplate(tpl.id)}
+                    title={tpl.desc}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                      active
+                        ? "bg-[var(--accent-bg)] text-white"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    {tpl.label}
+                  </button>
+                );
+              })}
+            </div>
+
             <button
               type="button"
               onClick={() => setShowPreview((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
+              className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
             >
               {showPreview ? (
                 <>
-                  <EyeOff className="h-4 w-4" />
+                  <EyeOff className="h-3.5 w-3.5" />
                   Ocultar Prévia
                 </>
               ) : (
                 <>
-                  <Eye className="h-4 w-4" />
-                  Pré-visualizar
+                  <Eye className="h-3.5 w-3.5" />
+                  Prévia A4
                 </>
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => downloadProfessionalResumePdf(form)}
-              className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-4 py-2 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/25"
+              onClick={() => downloadResumeTxt(form)}
+              className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-xs"
+              title="Baixar texto puro para colar em formulários ATS"
             >
-              <Download className="h-4 w-4" />
-              Gerar Currículo em PDF
+              <Download className="h-3.5 w-3.5" />
+              .TXT ATS
+            </button>
+
+            <button
+              type="button"
+              onClick={() => downloadProfessionalResumePdf(form, pdfTemplate)}
+              className="indeed-btn-primary inline-flex items-center gap-1.5 px-3.5 py-2 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Gerar PDF ({selectedTemplateMeta.label})
             </button>
           </div>
         </div>
 
-        {/* Prévia ao vivo estilo A4 */}
+        {/* Prévia ao vivo estilo A4 refletindo o modelo escolhido */}
         {showPreview && (
-          <div className="gupy-card mb-6 overflow-hidden">
-            <div className="flex items-center gap-5 bg-slate-900 px-6 py-5 text-white">
-              {form.photoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={form.photoUrl}
-                  alt="Foto"
-                  className="h-20 w-20 rounded-lg border border-white/20 object-cover"
-                />
-              )}
-              <div>
-                <h3 className="text-xl font-bold">
+          <div className="mb-6 overflow-hidden rounded-xl border border-[var(--border-strong)] bg-white text-slate-900 shadow-lg">
+            {pdfTemplate === "ats" ? (
+              <div className="border-b-2 border-slate-500 px-6 py-5">
+                <h3 className="text-xl font-bold text-slate-900">
                   {form.fullName || "Seu Nome Completo"}
                 </h3>
-                <p className="text-sm text-slate-300">
+                <p className="mt-0.5 text-sm font-semibold text-slate-700">
                   {[form.targetRole, form.seniority, form.workModel]
                     .filter(Boolean)
                     .join("  |  ") || "Cargo desejado"}
                 </p>
-                <p className="mt-1 text-xs text-slate-300">
+                <p className="mt-1 text-xs text-slate-700">
                   {[form.email, form.phone, form.location]
                     .filter(Boolean)
-                    .join("   |   ")}
+                    .join("  |  ")}
                 </p>
+                {(form.linkedinUrl || form.portfolioUrl) && (
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    {[form.linkedinUrl, form.portfolioUrl]
+                      .filter(Boolean)
+                      .join("  |  ")}
+                  </p>
+                )}
               </div>
-            </div>
+            ) : (
+              <div
+                className={`flex items-center gap-5 px-6 py-5 text-white ${
+                  pdfTemplate === "moderno" ? "bg-[#164081]" : "bg-slate-900"
+                }`}
+              >
+                {form.photoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={form.photoUrl}
+                    alt="Foto"
+                    className="h-20 w-20 rounded-lg border border-white/25 object-cover"
+                  />
+                )}
+                <div>
+                  <h3 className="text-xl font-bold">
+                    {form.fullName || "Seu Nome Completo"}
+                  </h3>
+                  <p
+                    className={`text-sm ${
+                      pdfTemplate === "moderno"
+                        ? "text-blue-200"
+                        : "text-slate-300"
+                    }`}
+                  >
+                    {[form.targetRole, form.seniority, form.workModel]
+                      .filter(Boolean)
+                      .join("  |  ") || "Cargo desejado"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-200">
+                    {[form.email, form.phone, form.location]
+                      .filter(Boolean)
+                      .join("   |   ")}
+                  </p>
+                  {(form.linkedinUrl || form.portfolioUrl) && (
+                    <p
+                      className={`mt-0.5 text-[11px] ${
+                        pdfTemplate === "moderno"
+                          ? "text-blue-100"
+                          : "text-indigo-300"
+                      }`}
+                    >
+                      {[form.linkedinUrl, form.portfolioUrl]
+                        .filter(Boolean)
+                        .join("   |   ")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4 p-6 text-sm">
               {form.summary && (
                 <div>
-                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                  <h4
+                    className={`border-b pb-1 text-xs font-bold uppercase ${
+                      pdfTemplate === "moderno"
+                        ? "border-blue-300 text-[#164081]"
+                        : "border-slate-300 text-slate-900"
+                    }`}
+                  >
                     Resumo Profissional
                   </h4>
                   <p className="mt-2 whitespace-pre-line text-slate-700">
@@ -471,7 +852,13 @@ export default function ResumeBuilder({
               )}
               {form.skills.length > 0 && (
                 <div>
-                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                  <h4
+                    className={`border-b pb-1 text-xs font-bold uppercase ${
+                      pdfTemplate === "moderno"
+                        ? "border-blue-300 text-[#164081]"
+                        : "border-slate-300 text-slate-900"
+                    }`}
+                  >
                     Habilidades e Tecnologias
                   </h4>
                   <p className="mt-2 text-slate-700">
@@ -481,7 +868,13 @@ export default function ResumeBuilder({
               )}
               {form.experience && (
                 <div>
-                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                  <h4
+                    className={`border-b pb-1 text-xs font-bold uppercase ${
+                      pdfTemplate === "moderno"
+                        ? "border-blue-300 text-[#164081]"
+                        : "border-slate-300 text-slate-900"
+                    }`}
+                  >
                     Experiência Profissional
                   </h4>
                   <p className="mt-2 whitespace-pre-line text-slate-700">
@@ -491,7 +884,13 @@ export default function ResumeBuilder({
               )}
               {form.education && (
                 <div>
-                  <h4 className="border-b border-slate-200 pb-1 text-xs font-bold uppercase text-slate-900">
+                  <h4
+                    className={`border-b pb-1 text-xs font-bold uppercase ${
+                      pdfTemplate === "moderno"
+                        ? "border-blue-300 text-[#164081]"
+                        : "border-slate-300 text-slate-900"
+                    }`}
+                  >
                     Formação Acadêmica
                   </h4>
                   <p className="mt-2 whitespace-pre-line text-slate-700">
@@ -499,13 +898,41 @@ export default function ResumeBuilder({
                   </p>
                 </div>
               )}
+              {form.languages && (
+                <div>
+                  <h4
+                    className={`border-b pb-1 text-xs font-bold uppercase ${
+                      pdfTemplate === "moderno"
+                        ? "border-blue-300 text-[#164081]"
+                        : "border-slate-300 text-slate-900"
+                    }`}
+                  >
+                    Idiomas
+                  </h4>
+                  <p className="mt-2 text-slate-700">{form.languages}</p>
+                </div>
+              )}
+              {form.certifications && (
+                <div>
+                  <h4
+                    className={`border-b pb-1 text-xs font-bold uppercase ${
+                      pdfTemplate === "moderno"
+                        ? "border-blue-300 text-[#164081]"
+                        : "border-slate-300 text-slate-900"
+                    }`}
+                  >
+                    Certificações e Cursos
+                  </h4>
+                  <p className="mt-2 text-slate-700">{form.certifications}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Foto + Dados Pessoais */}
-        <div className="mb-6 flex flex-col items-start gap-5 rounded-xl border border-slate-800 bg-slate-950/50 p-4 sm:flex-row sm:items-center">
-          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900">
+        <div className="gupy-subcard mb-6 flex flex-col items-start gap-5 p-4 sm:flex-row sm:items-center">
+          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]">
             {form.photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -514,19 +941,21 @@ export default function ResumeBuilder({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <Camera className="h-7 w-7 text-slate-500" />
+              <Camera className="h-7 w-7 text-[var(--text-muted)]" />
             )}
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-slate-200">
+            <p className="text-sm font-bold text-[var(--text-primary)]">
               Foto do Perfil (opcional)
             </p>
-            <p className="text-xs text-slate-400">
-              Aparece no cabeçalho do seu currículo em PDF profissional.
+            <p className="text-xs text-[var(--text-secondary)]">
+              Incluída automaticamente nos modelos{" "}
+              <strong>Executivo</strong> e <strong>Moderno Azul</strong> (oculta
+              no modelo <strong>ATS Puro</strong>).
             </p>
             <div className="flex flex-wrap gap-2">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700">
+              <label className="indeed-btn-secondary inline-flex cursor-pointer items-center gap-1.5 px-3 py-1.5 text-xs">
                 <Camera className="h-3.5 w-3.5" />
                 {form.photoUrl ? "Trocar foto" : "Enviar foto"}
                 <input
@@ -540,7 +969,7 @@ export default function ResumeBuilder({
                 <button
                   type="button"
                   onClick={() => setForm((p) => ({ ...p, photoUrl: "" }))}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-950/40"
+                  className="indeed-btn-secondary inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-rose-600 dark:text-rose-400"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Remover
@@ -552,7 +981,7 @@ export default function ResumeBuilder({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
               Nome completo
             </label>
             <input
@@ -560,12 +989,12 @@ export default function ResumeBuilder({
               value={form.fullName}
               onChange={(e) => setForm({ ...form, fullName: e.target.value })}
               placeholder="Ex: Higor Amaral"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
               E-mail profissional (e alertas)
             </label>
             <input
@@ -573,12 +1002,12 @@ export default function ResumeBuilder({
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="seu-email@exemplo.com"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
               Cargo desejado
             </label>
             <input
@@ -586,13 +1015,13 @@ export default function ResumeBuilder({
               value={form.targetRole}
               onChange={(e) => setForm({ ...form, targetRole: e.target.value })}
               placeholder="Ex: Desenvolvedor Full Stack"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
+              <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
                 Senioridade
               </label>
               <select
@@ -600,7 +1029,7 @@ export default function ResumeBuilder({
                 onChange={(e) =>
                   setForm({ ...form, seniority: e.target.value })
                 }
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm outline-none"
               >
                 <option value="">Selecione...</option>
                 <option value="Estágio">Estágio</option>
@@ -612,7 +1041,7 @@ export default function ResumeBuilder({
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
+              <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
                 Modelo de trabalho
               </label>
               <select
@@ -620,7 +1049,7 @@ export default function ResumeBuilder({
                 onChange={(e) =>
                   setForm({ ...form, workModel: e.target.value })
                 }
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm outline-none"
               >
                 <option value="">Qualquer</option>
                 <option value="Remoto">Remoto</option>
@@ -631,7 +1060,7 @@ export default function ResumeBuilder({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
               Telefone / WhatsApp
             </label>
             <input
@@ -639,12 +1068,12 @@ export default function ResumeBuilder({
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="(47) 99999-9999"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
               Cidade / Estado
             </label>
             <input
@@ -652,12 +1081,12 @@ export default function ResumeBuilder({
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
               placeholder="Ex: Joinville, SC"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
               LinkedIn
             </label>
             <input
@@ -667,12 +1096,12 @@ export default function ResumeBuilder({
                 setForm({ ...form, linkedinUrl: e.target.value })
               }
               placeholder="https://linkedin.com/in/seu-perfil"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
               GitHub / Portfólio
             </label>
             <input
@@ -682,16 +1111,29 @@ export default function ResumeBuilder({
                 setForm({ ...form, portfolioUrl: e.target.value })
               }
               placeholder="https://github.com/seu-usuario"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
         </div>
 
-        {/* Habilidades + Sugestões 1 clique */}
-        <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-          <label className="mb-1 block text-xs font-medium text-slate-300">
-            Habilidades / Tecnologias (usadas para buscar vagas automaticamente)
-          </label>
+        {/* Habilidades + Banco Categorizado */}
+        <div className="gupy-subcard mt-5 p-4">
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <label className="text-xs font-bold text-[var(--text-primary)]">
+              Habilidades / Tecnologias ({form.skills.length} selecionadas —
+              sincronizadas com as vagas)
+            </label>
+            {form.skills.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, skills: [] }))}
+                className="text-[11px] font-semibold text-rose-600 hover:underline dark:text-rose-400"
+              >
+                Limpar skills
+              </button>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <input
               type="text"
@@ -704,12 +1146,13 @@ export default function ResumeBuilder({
                 }
               }}
               placeholder="Digite uma skill (ex: React, Python, SQL) e aperte Enter"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
             <button
               type="button"
               onClick={() => addSkill()}
-              className="rounded-lg bg-slate-800 px-3 py-2 text-sm hover:bg-slate-700"
+              className="indeed-btn-primary px-3 py-2 text-sm"
+              aria-label="Adicionar skill"
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -719,13 +1162,15 @@ export default function ResumeBuilder({
             {form.skills.map((skill) => (
               <span
                 key={skill}
-                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300"
+                className="indeed-check-pill inline-flex items-center gap-1.5 px-2.5 py-1 text-xs"
               >
+                <Check className="h-3 w-3" />
                 {skill}
                 <button
                   type="button"
                   onClick={() => removeSkill(skill)}
-                  className="text-emerald-400 hover:text-rose-400"
+                  className="ml-0.5 font-bold hover:text-rose-600"
+                  aria-label={`Remover ${skill}`}
                 >
                   ×
                 </button>
@@ -733,42 +1178,72 @@ export default function ResumeBuilder({
             ))}
           </div>
 
-          <div className="mt-3 border-t border-slate-800 pt-3">
-            <p className="mb-2 text-[11px] text-slate-500">
-              Sugestões rápidas (clique para adicionar):
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {SUGGESTED_SKILLS.filter(
-                (s) =>
-                  !form.skills.some(
-                    (cur) => cur.toLowerCase() === s.toLowerCase()
-                  )
-              ).map((s) => (
+          <div className="mt-4 border-t border-[var(--border-color)] pt-3">
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[11px] font-semibold text-[var(--text-muted)]">
+                Banco rápido por área:
+              </span>
+              {SKILL_CATEGORY_KEYS.map((cat) => (
                 <button
-                  key={s}
+                  key={cat}
                   type="button"
-                  onClick={() => addSkill(s)}
-                  className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 transition hover:border-indigo-500 hover:text-indigo-300"
+                  onClick={() => setActiveSkillCategory(cat)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+                    activeSkillCategory === cat
+                      ? "indeed-pill-active"
+                      : "indeed-pill"
+                  }`}
                 >
-                  + {s}
+                  {cat}
                 </button>
               ))}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {categorySkills
+                .filter(
+                  (s) =>
+                    !form.skills.some(
+                      (cur) => cur.toLowerCase() === s.toLowerCase()
+                    )
+                )
+                .map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => addSkill(s)}
+                    className="indeed-badge px-2.5 py-1 text-[11px] transition hover:border-[var(--accent-ring)] hover:text-[var(--accent-bg)]"
+                  >
+                    + {s}
+                  </button>
+                ))}
             </div>
           </div>
         </div>
 
-        {/* Resumo, Experiência (com assistente), Formação (com assistente) */}
+        {/* Resumo, Experiência (com assistente e chips de impacto), Formação (com assistente) */}
         <div className="mt-5 grid gap-4">
           <div>
-            <label className="mb-1 block text-xs text-slate-400">
-              Resumo Profissional
-            </label>
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">
+                Resumo Profissional ({form.summary.trim().length} caracteres ·
+                ideal 120–600)
+              </label>
+              <button
+                type="button"
+                onClick={handleGenerateSummarySuggestion}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--accent-bg)] hover:underline"
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                Gerar sugestão de resumo
+              </button>
+            </div>
             <textarea
               rows={3}
               value={form.summary}
               onChange={(e) => setForm({ ...form, summary: e.target.value })}
               placeholder="Conte brevemente sobre sua trajetória, especialidades e objetivos..."
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-sm outline-none"
             />
           </div>
 
@@ -776,27 +1251,29 @@ export default function ResumeBuilder({
             {/* Experiência */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-slate-400">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">
                   Experiência Profissional
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowExpHelper((v) => !v)}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--accent-bg)] hover:underline"
                 >
                   <Briefcase className="h-3 w-3" />
-                  {showExpHelper ? "Fechar assistente" : "+ Adicionar experiência"}
+                  {showExpHelper
+                    ? "Fechar assistente"
+                    : "+ Adicionar experiência"}
                 </button>
               </div>
 
               {showExpHelper && (
-                <div className="space-y-2 rounded-xl border border-indigo-500/30 bg-slate-950 p-3">
+                <div className="gupy-subcard space-y-2 p-3">
                   <input
                     type="text"
                     value={expCompany}
                     onChange={(e) => setExpCompany(e.target.value)}
                     placeholder="Empresa (ex: Tech Corp)"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs outline-none"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -804,32 +1281,46 @@ export default function ResumeBuilder({
                       value={expRole}
                       onChange={(e) => setExpRole(e.target.value)}
                       placeholder="Cargo"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                      className="w-full px-2.5 py-1.5 text-xs outline-none"
                     />
                     <input
                       type="text"
                       value={expPeriod}
                       onChange={(e) => setExpPeriod(e.target.value)}
                       placeholder="Período (2023 - 2025)"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                      className="w-full px-2.5 py-1.5 text-xs outline-none"
                     />
                   </div>
                   <textarea
                     rows={2}
                     value={expDesc}
                     onChange={(e) => setExpDesc(e.target.value)}
-                    placeholder="Atividades (uma por linha)"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    placeholder="Atividades e resultados com métricas (uma por linha)"
+                    className="w-full px-2.5 py-1.5 text-xs outline-none"
                   />
                   <button
                     type="button"
                     onClick={handleInsertExperience}
-                    className="w-full rounded-lg bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                    className="indeed-btn-primary w-full py-1.5 text-xs"
                   >
                     Inserir no campo abaixo
                   </button>
                 </div>
               )}
+
+              <div className="flex flex-wrap gap-1.5">
+                {IMPACT_BULLETS.map((b) => (
+                  <button
+                    key={b.label}
+                    type="button"
+                    onClick={() => appendImpactBullet(b.text)}
+                    className="indeed-badge px-2 py-0.5 text-[11px] transition hover:border-[var(--accent-ring)] hover:text-[var(--accent-bg)]"
+                    title="Inserir modelo de tópico com impacto mensurável"
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
 
               <textarea
                 rows={6}
@@ -837,21 +1328,21 @@ export default function ResumeBuilder({
                 onChange={(e) =>
                   setForm({ ...form, experience: e.target.value })
                 }
-                placeholder="Empresa — Cargo | 2023 - Atual&#10;- Principais entregas e resultados..."
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                placeholder="Empresa — Cargo | 2023 - Atual&#10;- Principais entregas e resultados com números..."
+                className="w-full px-3 py-2 text-sm outline-none"
               />
             </div>
 
             {/* Formação */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-slate-400">
+                <label className="text-xs font-medium text-[var(--text-secondary)]">
                   Formação Acadêmica
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowEduHelper((v) => !v)}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--accent-bg)] hover:underline"
                 >
                   <GraduationCap className="h-3 w-3" />
                   {showEduHelper ? "Fechar assistente" : "+ Adicionar formação"}
@@ -859,13 +1350,13 @@ export default function ResumeBuilder({
               </div>
 
               {showEduHelper && (
-                <div className="space-y-2 rounded-xl border border-indigo-500/30 bg-slate-950 p-3">
+                <div className="gupy-subcard space-y-2 p-3">
                   <input
                     type="text"
                     value={eduCourse}
                     onChange={(e) => setEduCourse(e.target.value)}
                     placeholder="Curso (ex: Bacharelado em Sistemas)"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs outline-none"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -873,20 +1364,20 @@ export default function ResumeBuilder({
                       value={eduSchool}
                       onChange={(e) => setEduSchool(e.target.value)}
                       placeholder="Instituição"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                      className="w-full px-2.5 py-1.5 text-xs outline-none"
                     />
                     <input
                       type="text"
                       value={eduPeriod}
                       onChange={(e) => setEduPeriod(e.target.value)}
                       placeholder="Conclusão / Em andamento"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500"
+                      className="w-full px-2.5 py-1.5 text-xs outline-none"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleInsertEducation}
-                    className="w-full rounded-lg bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                    className="indeed-btn-primary w-full py-1.5 text-xs"
                   >
                     Inserir no campo abaixo
                   </button>
@@ -894,20 +1385,20 @@ export default function ResumeBuilder({
               )}
 
               <textarea
-                rows={6}
+                rows={7}
                 value={form.education}
                 onChange={(e) =>
                   setForm({ ...form, education: e.target.value })
                 }
                 placeholder="Curso&#10;Instituição | Ano"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm outline-none"
               />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
+              <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
                 Idiomas
               </label>
               <input
@@ -917,12 +1408,12 @@ export default function ResumeBuilder({
                   setForm({ ...form, languages: e.target.value })
                 }
                 placeholder="Ex: Português (Nativo), Inglês (Avançado)"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm outline-none"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
+              <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">
                 Certificações &amp; Cursos
               </label>
               <input
@@ -932,27 +1423,36 @@ export default function ResumeBuilder({
                   setForm({ ...form, certifications: e.target.value })
                 }
                 placeholder="Ex: AWS Cloud Practitioner, Rocketseat..."
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm outline-none"
               />
             </div>
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-[var(--border-color)] pt-5">
           <button
             type="button"
-            onClick={() => downloadProfessionalResumePdf(form)}
-            className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-4 py-2.5 text-sm font-medium text-indigo-200 transition hover:bg-indigo-500/25"
+            onClick={() => downloadResumeTxt(form)}
+            className="indeed-btn-secondary inline-flex items-center gap-2 px-4 py-2.5 text-sm"
           >
             <Download className="h-4 w-4" />
-            Gerar PDF
+            Baixar .TXT
+          </button>
+
+          <button
+            type="button"
+            onClick={() => downloadProfessionalResumePdf(form, pdfTemplate)}
+            className="indeed-btn-secondary inline-flex items-center gap-2 px-4 py-2.5 text-sm"
+          >
+            <Download className="h-4 w-4 text-[var(--accent-bg)]" />
+            Gerar PDF ({selectedTemplateMeta.label})
           </button>
 
           <button
             type="button"
             disabled={saving}
             onClick={() => submitResume(false)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-50"
+            className="indeed-btn-secondary inline-flex items-center gap-2 px-4 py-2.5 text-sm disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             Salvar Currículo
@@ -962,7 +1462,7 @@ export default function ResumeBuilder({
             type="button"
             disabled={saving}
             onClick={() => submitResume(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:opacity-50"
+            className="indeed-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm disabled:opacity-50"
           >
             <Rocket className="h-4 w-4" />
             {saving
