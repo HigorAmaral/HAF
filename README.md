@@ -32,18 +32,19 @@ Cada usuário conta com ambiente isolado por autenticação própria: currículo
 - **Filtros avançados:** data de publicação (`24h` a `30d`), modelo de trabalho (`Remoto`, `Híbrido`, `Presencial`), senioridade, tipo de contrato (`CLT`, `PJ`, `Estágio`), fonte, compatibilidade com currículo (`Match`), status, filtro **Com salário**, modo **Apenas Brasil / Global** e seleção de estado + até 5 cidades.
 - **Descrição e faixa salarial:** extração automática de descrição e salário quando informados nas fontes, com detecção de skills ausentes no currículo e adição em 1 clique às palavras-chave monitoradas.
 - **Deduplicação e bloqueio:** remoção de vagas duplicadas entre fontes distintas e exclusão automática por **Lista de Bloqueio** (empresas ocultas ou palavras negativas).
+- **Insights & Comparação:** painel **Insights do Mercado** com top tecnologias, empresas e modalidades, além de **comparação lado a lado** de até 3 vagas.
 - **Produtividade:** navegação por teclado (`↑` / `↓` ou `J` / `K` para alternar vaga e `S` para salvar), carta de apresentação editável, mensagem pronta para recrutadores e exportação em **CSV** e **JSON**.
 
-### 136 Fontes Confiáveis e 21 Conectores
-Varredura paralela com botão de **teste individual por fonte**, resumo de saúde (`Ativas`, `Pausadas`, `Com erro`), filtro por fontes com falha e ações em massa:
+### 136 Fontes Verificadas ao Vivo e 21 Conectores
+Varredura paralela com botão de **teste individual por fonte**, resumo de saúde (`Ativas`, `Pausadas`, `Com erro`), limpeza automática de fontes obsoletas, filtro por fontes com falha e ações em massa:
 
 | Categoria | Exemplos / Plataformas | Cobertura |
 | :--- | :--- | :--- |
-| **Gupy (Brasil)** | iFood, Mercado Livre, Itaú, BTG Pactual, Stone, PicPay, TOTVS, XP, Magalu, CI&T, WEG, Embraer e outras | **45 empresas** |
-| **Boards ATS Globais** | Greenhouse, Lever, Ashby, SmartRecruiters (+ conectores Workable, Recruitee, Breezy, BambooHR, Pinpoint, Personio) | **61 empresas** |
-| **Feeds RSS / Atom** | WeWorkRemotely (por especialidade), Jobspresso, Himalayas RSS, Remote.co, Remotive RSS | **13 feeds** |
-| **GitHub Vagas Brasil** | FrontendBR, BackendBR, React Brasil, QA Brasil, Vue.js BR, PHP BR, Android Dev BR, CocoaHeads, SouJava, .NET BR | **10 repositórios** |
-| **APIs Públicas Globais** | Remotive, Arbeitnow, RemoteOK, Jobicy, Himalayas, The Muse, Working Nomads | **7 APIs** |
+| **Gupy (Brasil)** | Localiza, PagBank/PagSeguro, Sicredi, Ambev, Grupo Boticário, Stefanini, Renner, Porto Seguro, WEG, Vivo, Suzano, Globo, Creditas, Softplan | **15 empresas** |
+| **Boards ATS Globais** | Databricks, Stripe, Anthropic, OpenAI, Ramp, Notion, Perplexity, Cursor, Supabase, Spotify, Palantir, Canva, Wise, Hugging Face, bunq (+ BambooHR, Pinpoint, Personio) | **89 empresas** |
+| **Feeds RSS / Atom** | WeWorkRemotely (10 categorias), Himalayas RSS, Jobicy RSS, Remotive RSS, RealWorkFromAnywhere | **14 feeds** |
+| **GitHub Vagas Brasil** | FrontendBR, BackendBR, React Brasil, QA Brasil, PHP BR, Android Dev BR, CocoaHeads, SouJava, .NET BR, DataScience BR, UX Brasil, Flutter BR | **12 repositórios** |
+| **APIs Públicas Globais** | Remotive, Arbeitnow, RemoteOK, Jobicy, Himalayas, Working Nomads | **6 APIs** |
 | **Scraper Genérico** | Páginas de carreiras via JSON-LD (`JobPosting`) ou seletor CSS customizado | **Sob demanda** |
 
 ### Estúdio de Currículo & Score ATS
@@ -57,7 +58,7 @@ Varredura paralela com botão de **teste individual por fonte**, resumo de saúd
 - **Assistentes de escrita:** gerador automático de resumo em 1 clique, banco de skills categorizado em 6 áreas e chips de bullets com foco em impacto mensurável.
 
 ### Candidaturas, Kanban & Notificações
-- **Alternância Lista / Kanban:** visualize o funil em 5 colunas (`Salvas`, `Enviadas`, `Teste Técnico`, `Entrevista`, `Proposta`) com movimentação rápida entre etapas (`←` / `→`).
+- **Alternância Lista / Kanban + Vaga Manual:** visualize o funil em 5 colunas (`Salvas`, `Enviadas`, `Teste Técnico`, `Entrevista`, `Proposta`) com movimentação rápida entre etapas (`←` / `→`) e cadastro de oportunidades externas via **+ Vaga Manual**.
 - **Lembretes de retorno (`Follow-up`):** agende datas manualmente ou com atalho `+5 dias` e receba avisos no sininho quando o prazo vencer.
 - **Central de Notificações (Sininho):** popover com vagas novas das últimas 24h, lembretes de follow-up, status dos canais (E-mail/Telegram) e botão de teste imediato.
 
@@ -92,7 +93,7 @@ src/
 │   │   ├── auth/             # Login, cadastro, recuperação de senha e edição da conta
 │   │   ├── cron/scrape/      # Endpoint agendado para varredura diária de todos os usuários
 │   │   ├── dashboard/        # Agregador inicial do painel do usuário
-│   │   ├── jobs/             # Favoritos, estágio no funil, notas, follow-up e limpeza
+│   │   ├── jobs/             # Cadastro manual, favoritos, estágio no funil, notas, follow-up e limpeza
 │   │   ├── keywords/         # CRUD de palavras-chave monitoradas
 │   │   ├── resume/           # Salvamento do currículo e parser de PDF
 │   │   ├── scrape/           # Execução manual sob demanda

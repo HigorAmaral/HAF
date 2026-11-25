@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
+  BarChart3,
   Bell,
   Bookmark,
   Briefcase,
@@ -29,6 +30,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Scale,
   Search,
   Send,
   Share2,
@@ -441,6 +443,9 @@ export default function HomePage() {
   const [noteEdits, setNoteEdits] = useState<Record<number, string>>({});
   const [savingNoteId, setSavingNoteId] = useState<number | null>(null);
   const [expandedDescJobId, setExpandedDescJobId] = useState<number | null>(null);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [compareJobIds, setCompareJobIds] = useState<number[]>([]);
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
 
   // Buscas salvas (localStorage)
   const [savedSearches, setSavedSearches] = useState<SavedSearchItem[]>([]);
@@ -448,6 +453,18 @@ export default function HomePage() {
   // Modal de carta de apresentação editável
   const [pitchJob, setPitchJob] = useState<JobRecord | null>(null);
   const [pitchDraft, setPitchDraft] = useState("");
+
+  // Modal de vaga manual (externa)
+  const [manualJobOpen, setManualJobOpen] = useState(false);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualCompany, setManualCompany] = useState("");
+  const [manualLocation, setManualLocation] = useState("");
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualSalary, setManualSalary] = useState("");
+  const [manualStage, setManualStage] = useState("enviado");
+  const [manualFollowUp, setManualFollowUp] = useState("");
+  const [manualNotes, setManualNotes] = useState("");
+  const [savingManualJob, setSavingManualJob] = useState(false);
 
   // Aba Candidaturas: filtro por etapa + anotação + modo Lista/Kanban
   const [appStageFilter, setAppStageFilter] = useState<string>("all");
@@ -513,6 +530,8 @@ export default function HomePage() {
       if (e.key === "Escape") {
         setNotifOpen(false);
         setAccountPanelOpen(false);
+        setCompareModalOpen(false);
+        setManualJobOpen(false);
       }
     };
     document.addEventListener("mousedown", handlePointerDown);
@@ -756,6 +775,59 @@ export default function HomePage() {
       showToast(err instanceof Error ? err.message : "Erro ao atualizar");
     } finally {
       setSavingAccount(false);
+    }
+  };
+
+  const toggleCompareJob = (jobId: number) => {
+    setCompareJobIds((prev) => {
+      if (prev.includes(jobId)) {
+        return prev.filter((id) => id !== jobId);
+      }
+      if (prev.length >= 3) {
+        showToast("Você pode comparar no máximo 3 vagas lado a lado.");
+        return prev;
+      }
+      return [...prev, jobId];
+    });
+  };
+
+  const handleCreateManualJob = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualTitle.trim() || !manualCompany.trim()) return;
+    setSavingManualJob(true);
+    try {
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: manualTitle,
+          company: manualCompany,
+          location: manualLocation,
+          url: manualUrl,
+          salary: manualSalary,
+          application_stage: manualStage,
+          follow_up_at: manualFollowUp,
+          notes: manualNotes,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao cadastrar vaga");
+
+      setManualTitle("");
+      setManualCompany("");
+      setManualLocation("");
+      setManualUrl("");
+      setManualSalary("");
+      setManualStage("enviado");
+      setManualFollowUp("");
+      setManualNotes("");
+      setManualJobOpen(false);
+      showToast("Vaga adicionada ao seu funil de candidaturas!");
+      await fetchDashboard();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Erro ao salvar vaga");
+    } finally {
+      setSavingManualJob(false);
     }
   };
 
@@ -1228,6 +1300,8 @@ export default function HomePage() {
       pitchJob ||
       notifOpen ||
       accountPanelOpen ||
+      compareModalOpen ||
+      manualJobOpen ||
       filteredJobs.length === 0
     ) {
       return;
@@ -1293,6 +1367,8 @@ export default function HomePage() {
     pitchJob,
     notifOpen,
     accountPanelOpen,
+    compareModalOpen,
+    manualJobOpen,
     filteredJobs,
     selectedJob,
     visibleLimit,
@@ -1459,6 +1535,56 @@ export default function HomePage() {
   }, [jobsList, todayIso]);
 
   const bellBadgeCount = newJobsTodayCount + dueFollowUps.length;
+
+  const comparedJobs = useMemo(
+    () =>
+      compareJobIds
+        .map((id) => (jobsList ?? []).find((j) => j.id === id))
+        .filter((j): j is JobRecord => Boolean(j)),
+    [compareJobIds, jobsList]
+  );
+
+  const marketInsights = useMemo(() => {
+    const skillCounts = new Map<string, number>();
+    const companyCounts = new Map<string, number>();
+    let remoteCount = 0;
+    let hybridCount = 0;
+    let onsiteCount = 0;
+    let salaryCount = 0;
+
+    for (const j of filteredJobs) {
+      const hay = normalizeForMatch(
+        `${j.title} ${j.location || ""} ${j.description || ""}`
+      );
+      for (const skill of COMMON_TECH_SKILLS) {
+        if (jobMentionsSkill(hay, skill)) {
+          skillCounts.set(skill, (skillCounts.get(skill) ?? 0) + 1);
+        }
+      }
+      if (j.company) {
+        companyCounts.set(j.company, (companyCounts.get(j.company) ?? 0) + 1);
+      }
+      const mode = detectJobBadges(`${j.title} ${j.location || ""}`).mode;
+      if (mode === "100% Remoto") remoteCount++;
+      else if (mode === "Híbrido") hybridCount++;
+      else onsiteCount++;
+
+      if (j.salary?.trim()) salaryCount++;
+    }
+
+    return {
+      topSkills: Array.from(skillCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8),
+      topCompanies: Array.from(companyCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5),
+      remoteCount,
+      hybridCount,
+      onsiteCount,
+      salaryCount,
+    };
+  }, [filteredJobs]);
 
   const accountStats = useMemo(() => {
     const jobs = jobsList ?? [];
@@ -1646,6 +1772,22 @@ export default function HomePage() {
             >
               <Ban className="h-3.5 w-3.5" />
               <span>Ocultar empresa</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleCompareJob(job.id)}
+              className={
+                compareJobIds.includes(job.id)
+                  ? "indeed-pill-active px-3 py-2.5 text-xs"
+                  : "indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2.5 text-xs"
+              }
+              title="Adicionar ou remover da comparação lado a lado (até 3)"
+            >
+              <Scale className="h-3.5 w-3.5" />
+              <span>
+                {compareJobIds.includes(job.id) ? "Na comparação" : "Comparar"}
+              </span>
             </button>
           </div>
         </div>
@@ -2613,6 +2755,16 @@ export default function HomePage() {
                   <span>Salvar busca</span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => setInsightsOpen((v) => !v)}
+                  className={insightsOpen ? "indeed-pill-active" : "indeed-pill"}
+                  title="Ver tecnologias e empresas em alta nas vagas filtradas"
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  <span>Insights</span>
+                </button>
+
                 {hasActiveFilters && (
                   <button
                     type="button"
@@ -2623,6 +2775,107 @@ export default function HomePage() {
                   </button>
                 )}
               </div>
+
+              {/* Painel de Insights do Mercado */}
+              {insightsOpen && (
+                <div className="gupy-card grid gap-4 p-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
+                      <BarChart3 className="h-3.5 w-3.5 text-[var(--accent-bg)]" />
+                      Tecnologias mais pedidas
+                    </p>
+                    {marketInsights.topSkills.length === 0 ? (
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        Sem dados suficientes nas vagas atuais.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {marketInsights.topSkills.map(([skill, count]) => (
+                          <button
+                            key={skill}
+                            type="button"
+                            onClick={() => {
+                              setSearch(skill);
+                              setVisibleLimit(30);
+                            }}
+                            className="indeed-badge inline-flex items-center gap-1 px-2 py-0.5 text-[11px] hover:border-[var(--accent-ring)] hover:text-[var(--accent-bg)]"
+                            title={`Filtrar por ${skill}`}
+                          >
+                            <span>{skill}</span>
+                            <span className="text-[10px] text-[var(--text-muted)]">
+                              ({count})
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-[var(--text-primary)]">
+                      Empresas com mais vagas
+                    </p>
+                    {marketInsights.topCompanies.length === 0 ? (
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        Nenhuma empresa listada.
+                      </p>
+                    ) : (
+                      <div className="space-y-1 text-xs">
+                        {marketInsights.topCompanies.map(([comp, count]) => (
+                          <button
+                            key={comp}
+                            type="button"
+                            onClick={() => {
+                              setSearch(comp);
+                              setVisibleLimit(30);
+                            }}
+                            className="flex w-full items-center justify-between rounded px-1.5 py-0.5 text-left hover:bg-[var(--bg-subtle)]"
+                          >
+                            <span className="truncate font-medium text-[var(--text-primary)]">
+                              {comp}
+                            </span>
+                            <span className="ml-2 shrink-0 text-[11px] font-bold text-[var(--accent-bg)]">
+                              {count}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-[var(--text-primary)]">
+                      Distribuição ({filteredJobs.length} vagas)
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="gupy-subcard px-2.5 py-1.5">
+                        <span className="text-[var(--text-muted)]">Remoto</span>
+                        <p className="font-bold text-[var(--text-primary)]">
+                          {marketInsights.remoteCount}
+                        </p>
+                      </div>
+                      <div className="gupy-subcard px-2.5 py-1.5">
+                        <span className="text-[var(--text-muted)]">Híbrido</span>
+                        <p className="font-bold text-[var(--text-primary)]">
+                          {marketInsights.hybridCount}
+                        </p>
+                      </div>
+                      <div className="gupy-subcard px-2.5 py-1.5">
+                        <span className="text-[var(--text-muted)]">Presencial</span>
+                        <p className="font-bold text-[var(--text-primary)]">
+                          {marketInsights.onsiteCount}
+                        </p>
+                      </div>
+                      <div className="gupy-subcard px-2.5 py-1.5">
+                        <span className="text-[var(--text-muted)]">Com salário</span>
+                        <p className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {marketInsights.salaryCount}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Painel Avançado de Estado & Cidades (Salvo no Monitor) */}
               {locationDrawerOpen && (
@@ -3183,6 +3436,15 @@ export default function HomePage() {
                       Mostrar todas
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => setManualJobOpen(true)}
+                    className="indeed-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Vaga Manual
+                  </button>
 
                   <div className="inline-flex rounded-lg border border-[var(--border-color)] bg-[var(--bg-subtle)] p-0.5">
                     <button
@@ -4475,6 +4737,351 @@ export default function HomePage() {
               </button>
             </div>
           </aside>
+        </div>
+      )}
+      {/* Barra Flutuante de Comparação */}
+      {comparedJobs.length > 0 && !compareModalOpen && (
+        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-[var(--accent-ring)] bg-[var(--bg-card)] px-4 py-2.5 shadow-2xl">
+          <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+            <Scale className="h-4 w-4 text-[var(--accent-bg)]" />
+            <span>Comparar vagas ({comparedJobs.length}/3)</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCompareModalOpen(true)}
+            className="indeed-btn-primary px-3 py-1.5 text-xs"
+          >
+            Abrir comparação
+          </button>
+          <button
+            type="button"
+            onClick={() => setCompareJobIds([])}
+            className="indeed-btn-secondary px-2.5 py-1.5 text-xs"
+          >
+            Limpar
+          </button>
+        </div>
+      )}
+
+      {/* Modal de Comparação Lado a Lado */}
+      {compareModalOpen && comparedJobs.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setCompareModalOpen(false)}
+        >
+          <div
+            className="gupy-card max-h-[88vh] w-full max-w-4xl overflow-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+              <div className="flex items-center gap-2">
+                <Scale className="h-4 w-4 text-[var(--accent-bg)]" />
+                <h3 className="text-base font-bold">
+                  Comparação Lado a Lado ({comparedJobs.length} vagas)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompareModalOpen(false)}
+                className="indeed-btn-secondary p-1.5"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border-color)]">
+                    <th className="w-32 py-2.5 pr-3 font-bold text-[var(--text-muted)]">
+                      Critério
+                    </th>
+                    {comparedJobs.map((job) => (
+                      <th key={job.id} className="min-w-[200px] px-3 py-2.5 align-top">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-bold text-[var(--text-primary)]">
+                            {job.title}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleCompareJob(job.id)}
+                            className="text-[var(--text-muted)] hover:text-rose-600"
+                            title="Remover da comparação"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-color)]">
+                  <tr>
+                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-secondary)]">
+                      Empresa
+                    </td>
+                    {comparedJobs.map((j) => (
+                      <td key={j.id} className="px-3 py-2.5 font-semibold">
+                        {j.company}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-secondary)]">
+                      Local
+                    </td>
+                    {comparedJobs.map((j) => (
+                      <td key={j.id} className="px-3 py-2.5">
+                        {j.location || "Não informado"}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-secondary)]">
+                      Salário
+                    </td>
+                    {comparedJobs.map((j) => (
+                      <td key={j.id} className="px-3 py-2.5">
+                        {j.salary ? (
+                          <span className="indeed-check-pill">{j.salary}</span>
+                        ) : (
+                          <span className="text-[var(--text-muted)]">Não informado</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-secondary)]">
+                      Modelo / Contrato
+                    </td>
+                    {comparedJobs.map((j) => {
+                      const b = detectJobBadges(`${j.title} ${j.location || ""}`);
+                      return (
+                        <td key={j.id} className="px-3 py-2.5">
+                          {b.mode}
+                          {b.contract ? ` · ${b.contract}` : ""}
+                          {b.seniority ? ` · ${b.seniority}` : ""}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-secondary)]">
+                      Match Currículo
+                    </td>
+                    {comparedJobs.map((j) => {
+                      const hay = `${j.title} ${j.company} ${j.location || ""} ${j.description || ""}`.toLowerCase();
+                      const matched = resumeTerms.filter((t) => hay.includes(t));
+                      const pct =
+                        resumeTerms.length > 0
+                          ? Math.min(
+                              100,
+                              Math.round(
+                                (matched.length / Math.min(6, resumeTerms.length)) * 100
+                              )
+                            )
+                          : 0;
+                      return (
+                        <td key={j.id} className="px-3 py-2.5">
+                          <span className="font-bold text-[var(--accent-bg)]">
+                            {pct}%
+                          </span>
+                          {matched.length > 0 && (
+                            <p className="mt-1 text-[11px] text-[var(--text-secondary)]">
+                              {matched.join(", ")}
+                            </p>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-secondary)]">
+                      Fonte &amp; Link
+                    </td>
+                    {comparedJobs.map((j) => (
+                      <td key={j.id} className="px-3 py-2.5 space-y-1.5">
+                        <p className="text-[11px] text-[var(--text-muted)]">
+                          {j.source_name}
+                        </p>
+                        <a
+                          href={j.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="indeed-btn-primary inline-flex items-center gap-1 px-2.5 py-1 text-[11px]"
+                        >
+                          Abrir vaga <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cadastro Manual de Vaga */}
+      {manualJobOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setManualJobOpen(false)}
+        >
+          <div
+            className="gupy-card w-full max-w-lg space-y-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-[var(--accent-bg)]" />
+                <h3 className="text-base font-bold">
+                  Cadastrar Vaga Manual (Externa)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManualJobOpen(false)}
+                className="indeed-btn-secondary p-1.5"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateManualJob} className="space-y-3 text-xs">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                    Título da vaga *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={manualTitle}
+                    onChange={(e) => setManualTitle(e.target.value)}
+                    placeholder="Ex: Dev Full Stack Pleno"
+                    className="w-full px-3 py-2 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                    Empresa *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={manualCompany}
+                    onChange={(e) => setManualCompany(e.target.value)}
+                    placeholder="Ex: Empresa ABC"
+                    className="w-full px-3 py-2 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                    Local / Modelo
+                  </label>
+                  <input
+                    type="text"
+                    value={manualLocation}
+                    onChange={(e) => setManualLocation(e.target.value)}
+                    placeholder="Ex: Remoto ou Joinville, SC"
+                    className="w-full px-3 py-2 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                    Faixa salarial (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={manualSalary}
+                    onChange={(e) => setManualSalary(e.target.value)}
+                    placeholder="Ex: R$ 6.000 - R$ 8.000"
+                    className="w-full px-3 py-2 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                    Etapa no Funil
+                  </label>
+                  <select
+                    value={manualStage}
+                    onChange={(e) => setManualStage(e.target.value)}
+                    className="w-full px-3 py-2 outline-none"
+                  >
+                    {APPLICATION_STAGES.filter((s) => s.value).map((st) => (
+                      <option key={st.value} value={st.value}>
+                        {st.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                    Lembrete de retorno
+                  </label>
+                  <input
+                    type="date"
+                    value={manualFollowUp}
+                    onChange={(e) => setManualFollowUp(e.target.value)}
+                    className="w-full px-3 py-2 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                  Link da vaga (LinkedIn / site)
+                </label>
+                <input
+                  type="url"
+                  value={manualUrl}
+                  onChange={(e) => setManualUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-medium text-[var(--text-secondary)]">
+                  Anotações (contato, stack, etapa...)
+                </label>
+                <textarea
+                  rows={2}
+                  value={manualNotes}
+                  onChange={(e) => setManualNotes(e.target.value)}
+                  className="w-full p-2.5 outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setManualJobOpen(false)}
+                  className="indeed-btn-secondary px-4 py-2 text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingManualJob}
+                  className="indeed-btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                >
+                  {savingManualJob ? "Salvando..." : "Adicionar ao Funil"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

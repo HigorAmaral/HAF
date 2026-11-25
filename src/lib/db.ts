@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { DEFAULT_SOURCES } from "./defaultSources";
+import { DEFAULT_SOURCES, DEPRECATED_DEFAULT_TARGETS } from "./defaultSources";
 
 let schemaPromise: Promise<void> | null = null;
 
@@ -172,10 +172,28 @@ export async function syncMissingDefaultSourcesForUser(
   await ensureSchema();
   const sql = getSql();
   const current = (await sql`
-    SELECT type, target FROM sources WHERE user_id = ${userId}
-  `) as Array<{ type: string; target: string }>;
+    SELECT id, type, target FROM sources WHERE user_id = ${userId}
+  `) as Array<{ id: number; type: string; target: string }>;
 
-  const existingKeys = new Set(current.map((s) => `${s.type}:${s.target}`));
+  const deprecatedKeys = new Set(
+    DEPRECATED_DEFAULT_TARGETS.map((d) => `${d.type}:${d.target}`)
+  );
+  const deadIds = current
+    .filter((s) => deprecatedKeys.has(`${s.type}:${s.target}`))
+    .map((s) => s.id);
+
+  if (deadIds.length > 0) {
+    await sql`
+      DELETE FROM sources WHERE id = ANY(${deadIds}) AND user_id = ${userId}
+    `;
+  }
+
+  const deadSet = new Set(deadIds);
+  const existingKeys = new Set(
+    current
+      .filter((s) => !deadSet.has(s.id))
+      .map((s) => `${s.type}:${s.target}`)
+  );
   let added = 0;
 
   for (const src of DEFAULT_SOURCES) {

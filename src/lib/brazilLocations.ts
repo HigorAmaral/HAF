@@ -143,7 +143,7 @@ export function isBrazilJob(jobText: string, sourceName = ""): boolean {
 
   // Fontes brasileiras garantidas e empresas brasileiras conhecidas
   if (
-    /\b(gupy|frontendbr|backendbr|react brasil|qa brasil|vue\.js brasil|php brasil|android dev br|cocoaheads|soujava|\.net dev br|vtex|ebanx|gympass|wellhub|nubank|mercadolivre|mercado livre|itau|btgpactual|pagbank|c6bank|rdstation|hotmart|quintoandar|creditas|globo|sicoob|ifood|stone|picpay|totvs|magalu|magazineluiza|xpinc|locaweb|ambev|grupoboticario|inter|bradesco|santander|vivo|claro|localiza|natura|b3|ciandt|stefanini|zup|compassuol|avenuecode|olist|contaazul|omie|nuvemshop|loggi|raia|dasa|renner|serasaexperian|sicredi|embraer|weg)\b/.test(
+    /\b(gupy|frontendbr|backendbr|react brasil|qa brasil|vue\.js brasil|php brasil|android dev br|cocoaheads|soujava|\.net dev br|datascience br|datascience-br|ux brasil|uxbrasil|flutter br|flutterbr|vtex|ebanx|gympass|wellhub|nubank|mercadolivre|mercado livre|itau|btgpactual|pagbank|pagseguro|c6bank|rdstation|hotmart|quintoandar|creditas|globo|sicoob|ifood|stone|picpay|totvs|magalu|magazineluiza|xpinc|locaweb|ambev|grupoboticario|inter|bradesco|santander|vivo|claro|localiza|natura|b3|ciandt|stefanini|zup|compassuol|avenuecode|olist|contaazul|omie|nuvemshop|loggi|raia|dasa|renner|serasaexperian|sicredi|embraer|weg|porto|suzano|softplan|wildlifestudios)\b/.test(
       text
     )
   ) {
