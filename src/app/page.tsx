@@ -20,6 +20,7 @@ import {
   MapPin,
   Menu,
   MessageSquare,
+  Phone,
   Play,
   Plus,
   RefreshCw,
@@ -401,6 +402,8 @@ export default function HomePage() {
   const [search, setSearch] = useState("");
   const [whereQuery, setWhereQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
   const [jobStatusFilter, setJobStatusFilter] = useState<
     "all" | "saved" | "applied" | "pending"
@@ -460,6 +463,31 @@ export default function HomePage() {
   const [savingLocation, setSavingLocation] = useState(false);
 
   const jobsListAnchorRef = useRef<HTMLDivElement | null>(null);
+  const notifMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent) => {
+      if (
+        notifOpen &&
+        notifMenuRef.current &&
+        !notifMenuRef.current.contains(e.target as Node)
+      ) {
+        setNotifOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setNotifOpen(false);
+        setAccountPanelOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEsc);
+    };
+  }, [notifOpen]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -1028,7 +1056,15 @@ export default function HomePage() {
   );
 
   useEffect(() => {
-    if (activeTab !== "jobs" || pitchJob || filteredJobs.length === 0) return;
+    if (
+      activeTab !== "jobs" ||
+      pitchJob ||
+      notifOpen ||
+      accountPanelOpen ||
+      filteredJobs.length === 0
+    ) {
+      return;
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -1088,6 +1124,8 @@ export default function HomePage() {
   }, [
     activeTab,
     pitchJob,
+    notifOpen,
+    accountPanelOpen,
     filteredJobs,
     selectedJob,
     visibleLimit,
@@ -1223,13 +1261,40 @@ export default function HomePage() {
     return { active, paused, errors };
   }, [sourcesList]);
 
+  const recentNewJobs = useMemo(() => {
+    if (!jobsList || nowMs <= 0) return [];
+    return [...jobsList]
+      .filter((j) => nowMs - getEffectiveDateMs(j) < 24 * 3600000)
+      .sort((a, b) => getEffectiveDateMs(b) - getEffectiveDateMs(a))
+      .slice(0, 6);
+  }, [jobsList, nowMs]);
+
   const newJobsTodayCount = useMemo(() => {
     if (!jobsList || nowMs <= 0) return 0;
     return jobsList.filter((j) => nowMs - getEffectiveDateMs(j) < 24 * 3600000)
       .length;
   }, [jobsList, nowMs]);
 
-  const firstName = (data?.user?.name?.trim() || "Candidato").split(/\s+/)[0];
+  const accountStats = useMemo(() => {
+    const jobs = jobsList ?? [];
+    return {
+      totalJobs: jobs.length,
+      savedCount: jobs.filter((j) => Boolean(j.saved)).length,
+      appliedCount: jobs.filter((j) => Boolean(j.applied)).length,
+      keywordsCount: data?.keywords?.length ?? 0,
+    };
+  }, [jobsList, data?.keywords]);
+
+  const displayFullName =
+    data?.resume?.full_name?.trim() || data?.user?.name?.trim() || "Candidato";
+  const firstName = displayFullName.split(/\s+/)[0];
+  const userInitials =
+    displayFullName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() || "")
+      .join("") || "HA";
 
   if (authState === "checking") {
     return (
@@ -1668,28 +1733,181 @@ export default function HomePage() {
               <Bookmark className="h-4 w-4" />
             </button>
 
-            <button
-              type="button"
-              onClick={handleTestNotifications}
-              disabled={testingAlert}
-              className="relative hidden rounded-lg p-2 text-[var(--text-primary)] transition hover:bg-[var(--bg-subtle)] md:inline-flex disabled:opacity-50"
-              title="Testar envio de alertas (Telegram / E-mail)"
-              aria-label="Notificações e alertas"
-            >
-              <Bell className="h-4 w-4" />
-              {newJobsTodayCount > 0 && (
-                <span className="absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold text-white">
-                  {newJobsTodayCount > 99 ? "99+" : newJobsTodayCount}
-                </span>
+            {/* Sininho com Popover de Notificações */}
+            <div ref={notifMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountPanelOpen(false);
+                  setNotifOpen((v) => !v);
+                }}
+                className={`relative inline-flex items-center justify-center rounded-lg p-2 transition ${
+                  notifOpen
+                    ? "bg-[var(--accent-soft)] text-[var(--accent-bg)]"
+                    : "text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
+                }`}
+                title="Notificações e alertas"
+                aria-label="Notificações e alertas"
+                aria-expanded={notifOpen}
+              >
+                <Bell className="h-4 w-4" />
+                {newJobsTodayCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-[var(--bg-header)]">
+                    {newJobsTodayCount > 99 ? "99+" : newJobsTodayCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Central de notificações"
+                  className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-2xl sm:w-96"
+                >
+                  <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-[var(--accent-bg)]" />
+                      <span className="text-sm font-bold text-[var(--text-primary)]">
+                        Notificações
+                      </span>
+                      <span className="indeed-match-badge px-2 py-0.5 text-[10px]">
+                        {newJobsTodayCount} hoje
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNotifOpen(false)}
+                      className="rounded-md p-1 text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+                      aria-label="Fechar notificações"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Status dos Canais */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-color)] bg-[var(--bg-subtle)] px-4 py-2 text-[11px]">
+                    <span className="truncate text-[var(--text-secondary)]">
+                      <strong>E-mail:</strong>{" "}
+                      {alertEmail || data?.user?.email || "Não configurado"}
+                    </span>
+                    <span
+                      className={`font-semibold ${
+                        telegramChatId
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-[var(--text-muted)]"
+                      }`}
+                    >
+                      Telegram:{" "}
+                      {telegramChatId ? "Conectado" : "Não configurado"}
+                    </span>
+                  </div>
+
+                  {/* Vagas Recentes das últimas 24h */}
+                  <div className="indeed-scroll max-h-72 divide-y divide-[var(--border-color)] overflow-y-auto">
+                    {recentNewJobs.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-xs text-[var(--text-secondary)]">
+                        <p className="font-medium text-[var(--text-primary)]">
+                          Nenhuma vaga nova nas últimas 24h.
+                        </p>
+                        {data?.runs?.[0]?.started_at && (
+                          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                            Última varredura:{" "}
+                            {new Date(data.runs[0].started_at).toLocaleString(
+                              "pt-BR"
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      recentNewJobs.map((job) => {
+                        const rel = formatRelativeTime(
+                          job.published_at,
+                          job.created_at,
+                          nowMs
+                        );
+                        return (
+                          <button
+                            key={job.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveTab("jobs");
+                              setSelectedJobId(job.id);
+                              setMobileDetailOpen(true);
+                              setNotifOpen(false);
+                            }}
+                            className="flex w-full items-start justify-between gap-2 px-4 py-2.5 text-left transition hover:bg-[var(--bg-subtle)]"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold text-[var(--text-primary)]">
+                                {job.title}
+                              </p>
+                              <p className="truncate text-[11px] text-[var(--text-secondary)]">
+                                {job.company} ·{" "}
+                                {job.location || "Local não informado"}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-[10px] font-semibold text-[var(--accent-bg)]">
+                              {rel.label}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Ações do Rodapé */}
+                  <div className="flex items-center justify-between gap-2 border-t border-[var(--border-color)] bg-[var(--bg-subtle)] px-4 py-2.5">
+                    <button
+                      type="button"
+                      disabled={testingAlert}
+                      onClick={() => void handleTestNotifications()}
+                      className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
+                    >
+                      <Send className="h-3 w-3" />
+                      {testingAlert ? "Testando..." : "Testar alertas"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotifOpen(false);
+                        setActiveTab("settings");
+                      }}
+                      className="text-xs font-bold text-[var(--accent-bg)] hover:underline"
+                    >
+                      Configurar alertas
+                    </button>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
 
             <ThemeToggle />
 
-            <div className="hidden items-center gap-1.5 px-2 text-xs font-semibold text-[var(--text-primary)] xl:flex">
-              <User className="h-4 w-4 text-[var(--text-secondary)]" />
-              <span className="max-w-[110px] truncate">{firstName}</span>
-            </div>
+            {/* Botão Clicável da Conta do Usuário */}
+            <button
+              type="button"
+              onClick={() => {
+                setNotifOpen(false);
+                setAccountPanelOpen(true);
+              }}
+              className="hidden items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5 text-xs font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-color)] hover:bg-[var(--bg-subtle)] sm:inline-flex"
+              title="Abrir painel da conta"
+              aria-label={`Abrir painel da conta de ${displayFullName}`}
+            >
+              {data?.resume?.photo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={data.resume.photo_url}
+                  alt={firstName}
+                  className="h-6 w-6 rounded-full border border-[var(--border-color)] object-cover"
+                />
+              ) : (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[10px] font-bold text-[var(--accent-bg)]">
+                  {userInitials}
+                </span>
+              )}
+              <span className="max-w-[120px] truncate">{firstName}</span>
+            </button>
 
             <span className="hidden h-5 w-px bg-[var(--border-color)] sm:block" />
 
@@ -1771,7 +1989,17 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
-            <div className="mt-2 flex items-center justify-between border-t border-[var(--border-color)] pt-2">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-color)] pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setAccountPanelOpen(true);
+                }}
+                className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+              >
+                <User className="h-3.5 w-3.5 text-[var(--accent-bg)]" /> Minha conta
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -3240,6 +3468,258 @@ export default function HomePage() {
           </div>
         )}
       </main>
+
+      {/* Painel Lateral da Conta do Usuário */}
+      {accountPanelOpen && data?.user && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Painel da conta do usuário"
+          onClick={() => setAccountPanelOpen(false)}
+        >
+          <aside
+            className="indeed-scroll flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-[var(--border-color)] bg-[var(--bg-card)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] px-5 py-4">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-[var(--accent-bg)]" />
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
+                  Minha Conta
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccountPanelOpen(false)}
+                className="indeed-btn-secondary p-1.5"
+                aria-label="Fechar painel da conta"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-5 p-5">
+              {/* Perfil */}
+              <div className="gupy-subcard flex items-center gap-4 p-4">
+                {data.resume?.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={data.resume.photo_url}
+                    alt={displayFullName}
+                    className="h-14 w-14 shrink-0 rounded-full border border-[var(--border-color)] object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-lg font-black text-[var(--accent-bg)]">
+                    {userInitials}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-bold text-[var(--text-primary)]">
+                    {displayFullName}
+                  </p>
+                  <p className="truncate text-xs text-[var(--text-secondary)]">
+                    {data.user.email}
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="indeed-badge px-2 py-0.5 text-[10px]">
+                      ID #{data.user.id}
+                    </span>
+                    {data.resume?.target_role && (
+                      <span className="indeed-match-badge truncate px-2 py-0.5 text-[10px]">
+                        {data.resume.target_role}
+                        {data.resume.seniority
+                          ? ` · ${data.resume.seniority}`
+                          : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Métricas da Conta */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="gupy-subcard p-3">
+                  <p className="text-[11px] font-medium text-[var(--text-muted)]">
+                    Vagas no painel
+                  </p>
+                  <p className="mt-0.5 text-xl font-black text-[var(--text-primary)]">
+                    {accountStats.totalJobs}
+                  </p>
+                </div>
+                <div className="gupy-subcard p-3">
+                  <p className="text-[11px] font-medium text-[var(--text-muted)]">
+                    Favoritas
+                  </p>
+                  <p className="mt-0.5 text-xl font-black text-[var(--accent-bg)]">
+                    {accountStats.savedCount}
+                  </p>
+                </div>
+                <div className="gupy-subcard p-3">
+                  <p className="text-[11px] font-medium text-[var(--text-muted)]">
+                    Candidatadas
+                  </p>
+                  <p className="mt-0.5 text-xl font-black text-emerald-600 dark:text-emerald-400">
+                    {accountStats.appliedCount}
+                  </p>
+                </div>
+                <div className="gupy-subcard p-3">
+                  <p className="text-[11px] font-medium text-[var(--text-muted)]">
+                    Fontes ativas
+                  </p>
+                  <p className="mt-0.5 text-xl font-black text-[var(--text-primary)]">
+                    {sourceHealth.active}
+                  </p>
+                </div>
+              </div>
+
+              {/* Informações Detalhadas */}
+              <div className="space-y-3 rounded-xl border border-[var(--border-color)] p-4 text-xs">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                  Dados da conta &amp; monitoramento
+                </p>
+
+                <div className="flex items-start gap-2.5">
+                  <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[var(--text-primary)]">
+                      Telefone / WhatsApp
+                    </p>
+                    <p className="text-[var(--text-secondary)]">
+                      {data.resume?.phone || "Não informado no currículo"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[var(--text-primary)]">
+                      Região monitorada
+                    </p>
+                    <p className="text-[var(--text-secondary)]">
+                      {filterState || filterCities.length > 0
+                        ? [filterState, ...filterCities]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : onlyBrazil
+                          ? "Brasil (todas as cidades)"
+                          : "Busca Global"}
+                      {includeRemote ? " · Inclui remotas" : ""}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[var(--text-primary)]">
+                      E-mail de alertas
+                    </p>
+                    <p className="truncate text-[var(--text-secondary)]">
+                      {alertEmail || data.user.email || "Não configurado"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <Bell className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[var(--text-primary)]">
+                      Telegram &amp; Palavras-chave
+                    </p>
+                    <p className="text-[var(--text-secondary)]">
+                      Telegram: {telegramChatId ? "Conectado" : "Não conectado"}{" "}
+                      · {accountStats.keywordsCount} palavra(s)-chave
+                    </p>
+                  </div>
+                </div>
+
+                {(data.resume?.linkedin_url || data.resume?.portfolio_url) && (
+                  <div className="flex flex-wrap gap-2 border-t border-[var(--border-color)] pt-2.5">
+                    {data.resume.linkedin_url && (
+                      <a
+                        href={data.resume.linkedin_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="indeed-pill text-[11px]"
+                      >
+                        <ExternalLink className="h-3 w-3" /> LinkedIn
+                      </a>
+                    )}
+                    {data.resume.portfolio_url && (
+                      <a
+                        href={data.resume.portfolio_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="indeed-pill text-[11px]"
+                      >
+                        <Globe className="h-3 w-3" /> Portfólio / GitHub
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Atalhos Rápidos */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountPanelOpen(false);
+                    setActiveTab("resume");
+                  }}
+                  className="indeed-btn-primary flex w-full items-center justify-center gap-2 py-2.5 text-xs"
+                >
+                  <FileText className="h-4 w-4" />
+                  Editar Meu Currículo
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountPanelOpen(false);
+                      setActiveTab("applications");
+                    }}
+                    className="indeed-btn-secondary inline-flex items-center justify-center gap-1.5 py-2 text-xs"
+                  >
+                    <Bookmark className="h-3.5 w-3.5" />
+                    Candidaturas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountPanelOpen(false);
+                      setActiveTab("settings");
+                    }}
+                    className="indeed-btn-secondary inline-flex items-center justify-center gap-1.5 py-2 text-xs"
+                  >
+                    <Bell className="h-3.5 w-3.5" />
+                    Alertas &amp; Fontes
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Rodapé Sair */}
+            <div className="border-t border-[var(--border-color)] p-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountPanelOpen(false);
+                  void handleLogout();
+                }}
+                className="indeed-btn-secondary flex w-full items-center justify-center gap-2 py-2 text-xs text-rose-600 dark:text-rose-400"
+              >
+                <LogOut className="h-4 w-4" />
+                Sair da conta
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
