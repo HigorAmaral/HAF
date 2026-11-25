@@ -114,6 +114,9 @@ export async function ensureSchema(): Promise<void> {
     await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS applied BOOLEAN NOT NULL DEFAULT FALSE`;
     await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS application_stage TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS salary TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS follow_up_at TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_external_id_key`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS jobs_user_external_idx ON jobs (COALESCE(user_id, 0), external_id)`;
 
@@ -253,5 +256,37 @@ export async function getLocationFilter(userId: number): Promise<{
     includeRemote: map.get("include_remote") !== "false",
     workMode,
     onlyBrazil: map.get("only_brazil") !== "false",
+  };
+}
+
+export async function getBlocklistSettings(userId: number): Promise<{
+  companies: string[];
+  terms: string[];
+}> {
+  await ensureSchema();
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT key, value FROM user_settings
+    WHERE user_id = ${userId}
+      AND key IN ('blocked_companies', 'blocked_terms')
+  `) as Array<{ key: string; value: string }>;
+
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+  const parseList = (raw: string | undefined): string[] => {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v).trim()).filter(Boolean);
+      }
+    } catch {
+      // Ignora JSON inválido
+    }
+    return [];
+  };
+
+  return {
+    companies: parseList(map.get("blocked_companies")),
+    terms: parseList(map.get("blocked_terms")),
   };
 }

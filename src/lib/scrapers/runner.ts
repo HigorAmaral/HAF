@@ -2,6 +2,7 @@ import { matchesLocationFilter } from "../brazilLocations";
 import {
   ensureSchema,
   getAlertSettings,
+  getBlocklistSettings,
   getLocationFilter,
   getSql,
   syncMissingDefaultSourcesForUser,
@@ -9,6 +10,18 @@ import {
 import { notifyNewJobs, type NotificationResult } from "../notifications";
 import { runSourceConnector } from "./connectors";
 import type { JobRecord, KeywordRecord, SourceRecord } from "./types";
+
+function normalizeDedupeKey(title: string, company: string): string {
+  const clean = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\(github vagas\)|\(gupy\)/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  return `${clean(title)}|${clean(company)}`;
+}
 
 export interface RunMonitorResult {
   runId: number;
@@ -44,7 +57,28 @@ export async function runJobMonitorForUser(
       SELECT * FROM keywords WHERE user_id = ${userId} ORDER BY id ASC
     `) as KeywordRecord[];
 
-    const locationFilter = await getLocationFilter(userId);
+    const [locationFilter, blocklist, existingRows] = await Promise.all([
+      getLocationFilter(userId),
+      getBlocklistSettings(userId),
+      sql`SELECT title, company FROM jobs WHERE user_id = ${userId}`,
+    ]);
+    const existingJobs = existingRows as Array<{
+      title?: string;
+      company?: string;
+    }>;
+
+    const blockedCompanies = blocklist.companies
+      .map((c) => c.trim().toLowerCase())
+      .filter(Boolean);
+    const blockedTerms = blocklist.terms
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+
+    const seenSignatures = new Set<string>(
+      existingJobs.map((j) =>
+        normalizeDedupeKey(String(j.title || ""), String(j.company || ""))
+      )
+    );
 
     const normalizedTerms = keywords
       .map((k) => k.term.trim().toLowerCase())
@@ -89,7 +123,20 @@ export async function runJobMonitorForUser(
 
       const { source, scraped } = res.value;
       const filtered = scraped.filter((job) => {
-        const haystack = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
+        const haystack = `${job.title} ${job.company} ${job.location || ""} ${job.description || ""}`.toLowerCase();
+        const companyLower = job.company.trim().toLowerCase();
+
+        if (
+          blockedCompanies.some(
+            (bc) => companyLower.includes(bc) || source.name.toLowerCase().includes(bc)
+          )
+        ) {
+          return false;
+        }
+        if (blockedTerms.some((bt) => haystack.includes(bt))) {
+          return false;
+        }
+
         const matchesKeyword =
           normalizedTerms.length === 0 ||
           normalizedTerms.some((term) => haystack.includes(term));
@@ -104,8 +151,15 @@ export async function runJobMonitorForUser(
       totalFound += filtered.length;
 
       for (const job of filtered) {
+        const sig = normalizeDedupeKey(job.title, job.company);
+        if (seenSignatures.has(sig)) continue;
+        seenSignatures.add(sig);
+
         const rows = (await sql`
-          INSERT INTO jobs (user_id, external_id, source_id, source_name, title, company, location, url, published_at)
+          INSERT INTO jobs (
+            user_id, external_id, source_id, source_name, title, company,
+            location, url, published_at, description, salary
+          )
           VALUES (
             ${userId},
             ${job.externalId},
@@ -115,7 +169,9 @@ export async function runJobMonitorForUser(
             ${job.company},
             ${job.location || null},
             ${job.url},
-            ${job.publishedAt || null}
+            ${job.publishedAt || null},
+            ${job.description || ""},
+            ${job.salary || ""}
           )
           ON CONFLICT (COALESCE(user_id, 0), external_id) DO NOTHING
           RETURNING *

@@ -54,6 +54,9 @@ export interface JobRecord {
   applied?: boolean;
   application_stage?: string;
   notes?: string;
+  description?: string;
+  salary?: string;
+  follow_up_at?: string;
   created_at: string;
 }
 
@@ -74,4 +77,6 @@ export interface ScrapedJob {
   location?: string;
   url: string;
   publishedAt?: string;
+  description?: string;
+  salary?: string;
 }

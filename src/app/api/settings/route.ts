@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
       includeRemote?: boolean;
       workMode?: string;
       onlyBrazil?: boolean;
+      blockedCompanies?: string[];
+      blockedTerms?: string[];
     };
 
     if (body.alertEmail !== undefined) {
@@ -82,6 +84,28 @@ export async function POST(req: NextRequest) {
       await sql`
         INSERT INTO user_settings (user_id, key, value, updated_at)
         VALUES (${user.userId}, 'only_brazil', ${String(Boolean(body.onlyBrazil))}, NOW())
+        ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `;
+    }
+
+    if (body.blockedCompanies !== undefined) {
+      const companies = Array.isArray(body.blockedCompanies)
+        ? body.blockedCompanies.map((c) => String(c).trim()).filter(Boolean)
+        : [];
+      await sql`
+        INSERT INTO user_settings (user_id, key, value, updated_at)
+        VALUES (${user.userId}, 'blocked_companies', ${JSON.stringify(companies)}, NOW())
+        ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `;
+    }
+
+    if (body.blockedTerms !== undefined) {
+      const terms = Array.isArray(body.blockedTerms)
+        ? body.blockedTerms.map((t) => String(t).trim()).filter(Boolean)
+        : [];
+      await sql`
+        INSERT INTO user_settings (user_id, key, value, updated_at)
+        VALUES (${user.userId}, 'blocked_terms', ${JSON.stringify(terms)}, NOW())
         ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
       `;
     }

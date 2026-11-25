@@ -20,6 +20,7 @@ export async function PATCH(
       applied?: boolean;
       application_stage?: string;
       notes?: string;
+      follow_up_at?: string;
     };
 
     const rows = await sql`
@@ -28,7 +29,8 @@ export async function PATCH(
         saved = COALESCE(${body.saved ?? null}, saved),
         applied = COALESCE(${body.applied ?? null}, applied),
         application_stage = COALESCE(${body.application_stage ?? null}, application_stage),
-        notes = COALESCE(${body.notes ?? null}, notes)
+        notes = COALESCE(${body.notes ?? null}, notes),
+        follow_up_at = COALESCE(${body.follow_up_at ?? null}, follow_up_at)
       WHERE id = ${Number(id)} AND user_id = ${user.userId}
       RETURNING *
     `;

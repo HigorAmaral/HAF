@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Ban,
   Bell,
   Bookmark,
   Briefcase,
@@ -9,12 +10,16 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Columns3,
+  DollarSign,
   Download,
   ExternalLink,
   FileJson,
   FileText,
   Filter,
   Globe,
+  KeyRound,
+  LayoutList,
   LogOut,
   Mail,
   MapPin,
@@ -64,6 +69,10 @@ interface DashboardData {
     telegramChatId: string;
   };
   locationFilter: LocationFilter;
+  blocklist?: {
+    companies: string[];
+    terms: string[];
+  };
   resume: DbResumeRow | null;
   integrations: {
     database: boolean;
@@ -229,6 +238,15 @@ function normalizeForMatch(text: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function normalizeJobSig(title: string, company: string): string {
+  const clean = (s: string) =>
+    normalizeForMatch(s)
+      .replace(/\(github vagas\)|\(gupy\)/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  return `${clean(title)}|${clean(company)}`;
 }
 
 function detectJobBadges(jobText: string): {
@@ -413,6 +431,7 @@ export default function HomePage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("all");
+  const [onlyWithSalary, setOnlyWithSalary] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>("match");
   const [visibleLimit, setVisibleLimit] = useState(30);
 
@@ -421,6 +440,7 @@ export default function HomePage() {
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [noteEdits, setNoteEdits] = useState<Record<number, string>>({});
   const [savingNoteId, setSavingNoteId] = useState<number | null>(null);
+  const [expandedDescJobId, setExpandedDescJobId] = useState<number | null>(null);
 
   // Buscas salvas (localStorage)
   const [savedSearches, setSavedSearches] = useState<SavedSearchItem[]>([]);
@@ -429,15 +449,29 @@ export default function HomePage() {
   const [pitchJob, setPitchJob] = useState<JobRecord | null>(null);
   const [pitchDraft, setPitchDraft] = useState("");
 
-  // Aba Candidaturas: filtro por etapa + anotação
+  // Aba Candidaturas: filtro por etapa + anotação + modo Lista/Kanban
   const [appStageFilter, setAppStageFilter] = useState<string>("all");
+  const [appViewMode, setAppViewMode] = useState<"list" | "kanban">("list");
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
 
-  // Aba Fontes: filtro de fontes
+  // Aba Fontes: filtro de fontes + teste individual + blocklist
   const [sourceSearch, setSourceSearch] = useState("");
   const [sourceTypeFilter, setSourceTypeFilter] = useState<string>("all");
   const [bulkSourceAction, setBulkSourceAction] = useState(false);
+  const [testingSourceId, setTestingSourceId] = useState<number | null>(null);
+  const [blockedCompanies, setBlockedCompanies] = useState<string[]>([]);
+  const [blockedTerms, setBlockedTerms] = useState<string[]>([]);
+  const [blockedCompanyInput, setBlockedCompanyInput] = useState("");
+  const [blockedTermInput, setBlockedTermInput] = useState("");
+
+  // Edição da conta (Painel Minha Conta)
+  const [accountEditOpen, setAccountEditOpen] = useState(false);
+  const [editAccountName, setEditAccountName] = useState("");
+  const [editAccountEmail, setEditAccountEmail] = useState("");
+  const [editCurrentPassword, setEditCurrentPassword] = useState("");
+  const [editNewPassword, setEditNewPassword] = useState("");
+  const [savingAccount, setSavingAccount] = useState(false);
 
   // Form nova fonte
   const [sourceName, setSourceName] = useState("");
@@ -539,6 +573,10 @@ export default function HomePage() {
       setIncludeRemote(parsed.locationFilter?.includeRemote ?? true);
       setWorkMode(parsed.locationFilter?.workMode || "all");
       setOnlyBrazil(parsed.locationFilter?.onlyBrazil ?? true);
+      setBlockedCompanies(parsed.blocklist?.companies ?? []);
+      setBlockedTerms(parsed.blocklist?.terms ?? []);
+      setEditAccountName(parsed.user?.name || "");
+      setEditAccountEmail(parsed.user?.email || "");
       setAuthState("authenticated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
@@ -634,6 +672,91 @@ export default function HomePage() {
   const handleDeleteSource = async (id: number) => {
     await fetch(`/api/sources/${id}`, { method: "DELETE" });
     await fetchDashboard();
+  };
+
+  const handleTestSource = async (src: SourceRecord) => {
+    setTestingSourceId(src.id);
+    try {
+      const res = await fetch(`/api/sources/${src.id}/test`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (json.ok) {
+        showToast(`${src.name}: OK — ${json.count} vaga(s) encontrada(s).`);
+      } else {
+        showToast(`${src.name}: ${json.error || "Falha ao testar fonte"}`);
+      }
+      await fetchDashboard();
+    } catch {
+      showToast(`Erro ao testar ${src.name}.`);
+    } finally {
+      setTestingSourceId(null);
+    }
+  };
+
+  const saveBlocklist = async (
+    nextCompanies = blockedCompanies,
+    nextTerms = blockedTerms,
+    feedbackMsg?: string
+  ) => {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        blockedCompanies: nextCompanies,
+        blockedTerms: nextTerms,
+      }),
+    });
+    if (res.ok) {
+      setBlockedCompanies(nextCompanies);
+      setBlockedTerms(nextTerms);
+      if (feedbackMsg) showToast(feedbackMsg);
+    } else {
+      showToast("Erro ao salvar lista de bloqueio.");
+    }
+  };
+
+  const handleHideCompany = async (companyName: string) => {
+    const clean = companyName.trim();
+    if (!clean) return;
+    if (blockedCompanies.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+      showToast(`${clean} já está oculta.`);
+      return;
+    }
+    const next = [...blockedCompanies, clean];
+    await saveBlocklist(
+      next,
+      blockedTerms,
+      `Vagas da empresa "${clean}" ocultadas!`
+    );
+  };
+
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingAccount(true);
+    try {
+      const res = await fetch("/api/auth/account", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editAccountName,
+          email: editAccountEmail,
+          currentPassword: editCurrentPassword || undefined,
+          newPassword: editNewPassword || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro ao atualizar conta");
+      setEditCurrentPassword("");
+      setEditNewPassword("");
+      setAccountEditOpen(false);
+      showToast("Dados da conta atualizados com sucesso!");
+      await fetchDashboard();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Erro ao atualizar");
+    } finally {
+      setSavingAccount(false);
+    }
   };
 
   const handleAddKeyword = async (e: React.FormEvent) => {
@@ -787,6 +910,7 @@ export default function HomePage() {
         applied?: boolean;
         application_stage?: string;
         notes?: string;
+        follow_up_at?: string;
       }
     ) => {
       await fetch(`/api/jobs/${jobId}`, {
@@ -872,6 +996,7 @@ export default function HomePage() {
     setDateFilter("all");
     setSourceFilter("all");
     setMatchFilter("all");
+    setOnlyWithSalary(false);
     setJobStatusFilter("all");
     setFilterState("");
     setFilterCities([]);
@@ -931,10 +1056,21 @@ export default function HomePage() {
       "30d": 30 * 24 * 3600000,
     };
 
+    const blockedCompNorm = blockedCompanies
+      .map((c) => normalizeForMatch(c).trim())
+      .filter(Boolean);
+    const blockedTermNorm = blockedTerms
+      .map((t) => normalizeForMatch(t).trim())
+      .filter(Boolean);
+
     const list = jobsList.filter((j) => {
       const hay = normalizeForMatch(
-        `${j.title} ${j.company} ${j.location || ""} ${j.source_name}`
+        `${j.title} ${j.company} ${j.location || ""} ${j.source_name} ${j.description || ""} ${j.salary || ""}`
       );
+      const compNorm = normalizeForMatch(j.company);
+      if (blockedCompNorm.some((bc) => compNorm.includes(bc))) return false;
+      if (blockedTermNorm.some((bt) => hay.includes(bt))) return false;
+
       const matchesSearch = !q || hay.includes(q);
 
       const locHay = normalizeForMatch(`${j.title} ${j.location || ""}`);
@@ -994,6 +1130,8 @@ export default function HomePage() {
             ? matchCount >= 1
             : matchCount >= 2;
 
+      const matchesSalary = !onlyWithSalary || Boolean(j.salary?.trim());
+
       return (
         matchesSearch &&
         matchesWhere &&
@@ -1003,23 +1141,49 @@ export default function HomePage() {
         matchesContract &&
         matchesSource &&
         matchesDate &&
-        matchesSkillThreshold
+        matchesSkillThreshold &&
+        matchesSalary
       );
     });
 
+    // Deduplicação entre fontes diferentes (mantém a melhor versão: salva/candidatada/descrição/recente)
+    const dedupedMap = new Map<string, JobRecord>();
+    const rankRecord = (job: JobRecord) =>
+      (job.saved ? 4 : 0) +
+      (job.applied ? 4 : 0) +
+      (job.description ? 2 : 0) +
+      (job.salary ? 1 : 0);
+
+    for (const j of list) {
+      const sig = normalizeJobSig(j.title, j.company);
+      const existing = dedupedMap.get(sig);
+      if (!existing) {
+        dedupedMap.set(sig, j);
+      } else {
+        const diff = rankRecord(j) - rankRecord(existing);
+        if (
+          diff > 0 ||
+          (diff === 0 && getEffectiveDateMs(j) > getEffectiveDateMs(existing))
+        ) {
+          dedupedMap.set(sig, j);
+        }
+      }
+    }
+    const deduped = Array.from(dedupedMap.values());
+
     if (sortBy === "company") {
-      return [...list].sort((a, b) => a.company.localeCompare(b.company));
+      return [...deduped].sort((a, b) => a.company.localeCompare(b.company));
     }
 
     if (sortBy === "recent" || resumeTerms.length === 0) {
-      return [...list].sort(
+      return [...deduped].sort(
         (a, b) => getEffectiveDateMs(b) - getEffectiveDateMs(a)
       );
     }
 
-    return [...list].sort((a, b) => {
-      const hayA = `${a.title} ${a.company} ${a.location || ""}`.toLowerCase();
-      const hayB = `${b.title} ${b.company} ${b.location || ""}`.toLowerCase();
+    return [...deduped].sort((a, b) => {
+      const hayA = `${a.title} ${a.company} ${a.location || ""} ${a.description || ""}`.toLowerCase();
+      const hayB = `${b.title} ${b.company} ${b.location || ""} ${b.description || ""}`.toLowerCase();
       const scoreA = resumeTerms.filter((t) => hayA.includes(t)).length;
       const scoreB = resumeTerms.filter((t) => hayB.includes(t)).length;
       if (scoreB !== scoreA) return scoreB - scoreA;
@@ -1027,6 +1191,8 @@ export default function HomePage() {
     });
   }, [
     jobsList,
+    blockedCompanies,
+    blockedTerms,
     search,
     whereQuery,
     filterState,
@@ -1040,6 +1206,7 @@ export default function HomePage() {
     sourceFilter,
     dateFilter,
     matchFilter,
+    onlyWithSalary,
     sortBy,
     resumeTerms,
     nowMs,
@@ -1142,6 +1309,7 @@ export default function HomePage() {
       dateFilter !== "all" ||
       sourceFilter !== "all" ||
       matchFilter !== "all" ||
+      onlyWithSalary ||
       jobStatusFilter !== "all" ||
       filterState ||
       filterCities.length > 0
@@ -1275,6 +1443,23 @@ export default function HomePage() {
       .length;
   }, [jobsList, nowMs]);
 
+  const todayIso = useMemo(
+    () => (nowMs > 0 ? new Date(nowMs).toISOString().slice(0, 10) : ""),
+    [nowMs]
+  );
+
+  const dueFollowUps = useMemo(() => {
+    if (!jobsList || !todayIso) return [];
+    return jobsList.filter(
+      (j) =>
+        Boolean(j.follow_up_at?.trim()) &&
+        j.follow_up_at!.trim() <= todayIso &&
+        j.application_stage !== "encerrada"
+    );
+  }, [jobsList, todayIso]);
+
+  const bellBadgeCount = newJobsTodayCount + dueFollowUps.length;
+
   const accountStats = useMemo(() => {
     const jobs = jobsList ?? [];
     return {
@@ -1309,7 +1494,7 @@ export default function HomePage() {
   }
 
   const renderJobDetailContent = (job: JobRecord) => {
-    const hay = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
+    const hay = `${job.title} ${job.company} ${job.location || ""} ${job.description || ""} ${job.salary || ""}`.toLowerCase();
     const matchedTerms = resumeTerms.filter((t) => hay.includes(t));
     const missingSkills = COMMON_TECH_SKILLS.filter(
       (skill) =>
@@ -1452,6 +1637,16 @@ export default function HomePage() {
               <MessageSquare className="h-4 w-4 text-[var(--accent-bg)]" />
               <span>Msg Recrutador</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => void handleHideCompany(job.company)}
+              className="indeed-btn-secondary inline-flex items-center gap-1.5 px-3 py-2.5 text-xs text-rose-600 dark:text-rose-400"
+              title={`Ocultar todas as vagas de ${job.company}`}
+            >
+              <Ban className="h-3.5 w-3.5" />
+              <span>Ocultar empresa</span>
+            </button>
           </div>
         </div>
 
@@ -1461,6 +1656,18 @@ export default function HomePage() {
             Dados da vaga
           </h3>
           <div className="space-y-2.5 text-xs">
+            {job.salary && (
+              <div className="flex items-start gap-3">
+                <DollarSign className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <div>
+                  <p className="font-bold text-[var(--text-primary)]">
+                    Faixa salarial informada
+                  </p>
+                  <span className="indeed-check-pill mt-1">{job.salary}</span>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-start gap-3">
               <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-secondary)]" />
               <div>
@@ -1511,6 +1718,35 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* Descrição capturada da vaga */}
+        {job.description && (
+          <div className="space-y-2 border-b border-[var(--border-color)] pb-5">
+            <h3 className="text-base font-bold text-[var(--text-primary)]">
+              Descrição da vaga
+            </h3>
+            <p className="whitespace-pre-line text-xs leading-relaxed text-[var(--text-secondary)]">
+              {expandedDescJobId === job.id || job.description.length <= 520
+                ? job.description
+                : `${job.description.slice(0, 520).trim()}...`}
+            </p>
+            {job.description.length > 520 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedDescJobId((cur) =>
+                    cur === job.id ? null : job.id
+                  )
+                }
+                className="text-xs font-bold text-[var(--accent-bg)] hover:underline"
+              >
+                {expandedDescJobId === job.id
+                  ? "Mostrar menos"
+                  : "Ler descrição completa"}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Compatibilidade com Currículo */}
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-subtle)] p-4">
@@ -1620,6 +1856,56 @@ export default function HomePage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Lembrete de Follow-up */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-color)] pt-2.5 text-xs">
+            <span className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+              <Clock className="h-3.5 w-3.5 text-[var(--accent-bg)]" />
+              Lembrete de retorno (follow-up):
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input
+                type="date"
+                value={job.follow_up_at || ""}
+                onChange={(e) => {
+                  void handleToggleJobFlag(job.id, {
+                    follow_up_at: e.target.value,
+                  });
+                  showToast("Data de follow-up atualizada!");
+                }}
+                className="px-2 py-1 text-[11px]"
+                aria-label="Data de follow-up"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const base = nowMs > 0 ? nowMs : 0;
+                  if (!base) return;
+                  const targetDate = new Date(base + 5 * 86400000)
+                    .toISOString()
+                    .slice(0, 10);
+                  void handleToggleJobFlag(job.id, {
+                    follow_up_at: targetDate,
+                  });
+                  showToast("Lembrete definido para daqui a 5 dias!");
+                }}
+                className="indeed-btn-secondary px-2 py-1 text-[11px]"
+              >
+                +5 dias
+              </button>
+              {job.follow_up_at && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleToggleJobFlag(job.id, { follow_up_at: "" });
+                  }}
+                  className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-rose-600"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -1751,9 +2037,9 @@ export default function HomePage() {
                 aria-expanded={notifOpen}
               >
                 <Bell className="h-4 w-4" />
-                {newJobsTodayCount > 0 && (
+                {bellBadgeCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-[var(--bg-header)]">
-                    {newJobsTodayCount > 99 ? "99+" : newJobsTodayCount}
+                    {bellBadgeCount > 99 ? "99+" : bellBadgeCount}
                   </span>
                 )}
               </button>
@@ -1801,6 +2087,31 @@ export default function HomePage() {
                       {telegramChatId ? "Conectado" : "Não configurado"}
                     </span>
                   </div>
+
+                  {/* Lembretes de Follow-up pendentes */}
+                  {dueFollowUps.length > 0 && (
+                    <div className="border-b border-[var(--border-color)] bg-amber-500/10 px-4 py-2.5">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                        <Clock className="h-3.5 w-3.5" />
+                        {dueFollowUps.length} retorno(s) / follow-up para hoje
+                      </p>
+                      <div className="space-y-1">
+                        {dueFollowUps.slice(0, 3).map((job) => (
+                          <button
+                            key={job.id}
+                            type="button"
+                            onClick={() => {
+                              setNotifOpen(false);
+                              setActiveTab("applications");
+                            }}
+                            className="block w-full truncate text-left text-[11px] font-medium text-[var(--text-primary)] hover:text-[var(--accent-bg)] hover:underline"
+                          >
+                            • {job.title} ({job.company})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Vagas Recentes das últimas 24h */}
                   <div className="indeed-scroll max-h-72 divide-y divide-[var(--border-color)] overflow-y-auto">
@@ -2263,6 +2574,19 @@ export default function HomePage() {
 
                 <button
                   type="button"
+                  onClick={() => {
+                    setOnlyWithSalary((v) => !v);
+                    setVisibleLimit(30);
+                  }}
+                  className={onlyWithSalary ? "indeed-pill-active" : "indeed-pill"}
+                  title="Mostrar apenas vagas com faixa salarial identificada"
+                >
+                  <DollarSign className="h-3.5 w-3.5" />
+                  <span>Com salário</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setLocationDrawerOpen((v) => !v)}
                   className={
                     locationDrawerOpen || filterState || filterCities.length > 0
@@ -2582,7 +2906,7 @@ export default function HomePage() {
                     <div className="space-y-3">
                       {visibleJobs.map((job) => {
                         const isSelected = selectedJob?.id === job.id;
-                        const hay = `${job.title} ${job.company} ${job.location || ""}`.toLowerCase();
+                        const hay = `${job.title} ${job.company} ${job.location || ""} ${job.description || ""}`.toLowerCase();
                         const matchedCount = resumeTerms.filter((t) =>
                           hay.includes(t)
                         ).length;
@@ -2671,6 +2995,11 @@ export default function HomePage() {
 
                             {/* Chips verdes estilo Indeed */}
                             <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                              {job.salary && (
+                                <span className="indeed-check-pill">
+                                  <Check className="h-3 w-3" /> {job.salary}
+                                </span>
+                              )}
                               <span className="indeed-check-pill">
                                 <Check className="h-3 w-3" /> {badges.mode}
                               </span>
@@ -2834,27 +3163,185 @@ export default function HomePage() {
             </div>
 
             <section className="gupy-card p-6">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-bold">
                     Processos Seletivos em Acompanhamento
                   </h2>
                   <p className="text-xs text-[var(--text-secondary)]">
-                    Clique nos cards acima para filtrar por etapa e registre anotações.
+                    Alterne entre Lista e Kanban, gerencie etapas e defina lembretes de retorno.
                   </p>
                 </div>
-                {appStageFilter !== "all" && (
-                  <button
-                    type="button"
-                    onClick={() => setAppStageFilter("all")}
-                    className="text-xs font-semibold text-[var(--accent-bg)] hover:underline"
-                  >
-                    Mostrar todas
-                  </button>
-                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {appStageFilter !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => setAppStageFilter("all")}
+                      className="text-xs font-semibold text-[var(--accent-bg)] hover:underline"
+                    >
+                      Mostrar todas
+                    </button>
+                  )}
+
+                  <div className="inline-flex rounded-lg border border-[var(--border-color)] bg-[var(--bg-subtle)] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setAppViewMode("list")}
+                      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                        appViewMode === "list"
+                          ? "bg-[var(--accent-bg)] text-white"
+                          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      }`}
+                    >
+                      <LayoutList className="h-3.5 w-3.5" />
+                      Lista
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAppViewMode("kanban")}
+                      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                        appViewMode === "kanban"
+                          ? "bg-[var(--accent-bg)] text-white"
+                          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      }`}
+                    >
+                      <Columns3 className="h-3.5 w-3.5" />
+                      Kanban
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {filteredApplications.length === 0 ? (
+              {appViewMode === "kanban" ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {(
+                    [
+                      ["salva", "Salvas"],
+                      ["enviado", "Enviadas"],
+                      ["teste", "Teste Técnico"],
+                      ["entrevista", "Entrevista"],
+                      ["proposta", "Proposta"],
+                    ] as const
+                  ).map(([colKey, colLabel], colIdx, colsArr) => {
+                    const colJobs = trackedJobs.filter((j) => {
+                      const effective =
+                        j.application_stage ||
+                        (j.applied ? "enviado" : j.saved ? "salva" : "");
+                      return effective === colKey;
+                    });
+                    return (
+                      <div
+                        key={colKey}
+                        className="flex min-h-[260px] flex-col rounded-xl border border-[var(--border-color)] bg-[var(--bg-subtle)] p-3"
+                      >
+                        <div className="mb-3 flex items-center justify-between border-b border-[var(--border-color)] pb-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                            {colLabel}
+                          </span>
+                          <span className="indeed-match-badge px-2 py-0.5 text-[10px]">
+                            {colJobs.length}
+                          </span>
+                        </div>
+
+                        <div className="flex-1 space-y-2.5">
+                          {colJobs.length === 0 ? (
+                            <p className="py-6 text-center text-[11px] text-[var(--text-muted)]">
+                              Vazio
+                            </p>
+                          ) : (
+                            colJobs.map((job) => {
+                              const isDue = Boolean(
+                                job.follow_up_at &&
+                                  todayIso &&
+                                  job.follow_up_at <= todayIso
+                              );
+                              return (
+                                <div
+                                  key={job.id}
+                                  className="indeed-job-card space-y-2 p-3 text-xs"
+                                >
+                                  <div className="space-y-0.5">
+                                    <p className="line-clamp-2 font-bold leading-snug text-[var(--text-primary)]">
+                                      {job.title}
+                                    </p>
+                                    <p className="truncate text-[11px] text-[var(--text-secondary)]">
+                                      {job.company}
+                                    </p>
+                                  </div>
+
+                                  {job.follow_up_at && (
+                                    <div
+                                      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                        isDue
+                                          ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                                          : "bg-[var(--bg-subtle)] text-[var(--text-muted)]"
+                                      }`}
+                                    >
+                                      <Clock className="h-3 w-3" />
+                                      {new Date(
+                                        `${job.follow_up_at}T12:00:00`
+                                      ).toLocaleDateString("pt-BR")}
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center justify-between gap-1 border-t border-[var(--border-color)] pt-2">
+                                    <div className="flex items-center gap-1">
+                                      {colIdx > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const prevStage =
+                                              colsArr[colIdx - 1][0];
+                                            void handleToggleJobFlag(job.id, {
+                                              application_stage: prevStage,
+                                              applied: prevStage !== "salva",
+                                            });
+                                          }}
+                                          className="indeed-btn-secondary px-2 py-0.5 text-[11px]"
+                                          title={`Mover para ${colsArr[colIdx - 1][1]}`}
+                                        >
+                                          ←
+                                        </button>
+                                      )}
+                                      {colIdx < colsArr.length - 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nextStage =
+                                              colsArr[colIdx + 1][0];
+                                            void handleToggleJobFlag(job.id, {
+                                              application_stage: nextStage,
+                                              applied: nextStage !== "salva",
+                                            });
+                                          }}
+                                          className="indeed-btn-secondary px-2 py-0.5 text-[11px]"
+                                          title={`Mover para ${colsArr[colIdx + 1][1]}`}
+                                        >
+                                          →
+                                        </button>
+                                      )}
+                                    </div>
+                                    <a
+                                      href={job.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--accent-bg)] hover:underline"
+                                    >
+                                      Vaga
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : filteredApplications.length === 0 ? (
                 <div className="gupy-subcard py-14 text-center">
                   <p className="text-sm text-[var(--text-primary)]">
                     Nenhuma candidatura nesta etapa.
@@ -2866,7 +3353,13 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredApplications.map((job) => (
+                  {filteredApplications.map((job) => {
+                    const isFollowUpDue = Boolean(
+                      job.follow_up_at &&
+                        todayIso &&
+                        job.follow_up_at <= todayIso
+                    );
+                    return (
                     <div
                       key={job.id}
                       className="indeed-job-card space-y-3 p-4"
@@ -2885,6 +3378,21 @@ export default function HomePage() {
                                     (job.applied ? "enviado" : "salva"))
                               )?.label || "Salva"}
                             </span>
+                            {job.follow_up_at && (
+                              <span
+                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold ${
+                                  isFollowUpDue
+                                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                                    : "indeed-badge"
+                                }`}
+                              >
+                                <Clock className="h-3 w-3" />
+                                Retorno:{" "}
+                                {new Date(
+                                  `${job.follow_up_at}T12:00:00`
+                                ).toLocaleDateString("pt-BR")}
+                              </span>
+                            )}
                           </div>
                           <h3 className="truncate font-bold">{job.title}</h3>
                           <p className="text-xs text-[var(--text-secondary)]">
@@ -2893,6 +3401,19 @@ export default function HomePage() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="date"
+                            value={job.follow_up_at || ""}
+                            onChange={(e) => {
+                              void handleToggleJobFlag(job.id, {
+                                follow_up_at: e.target.value,
+                              });
+                              showToast("Lembrete de follow-up atualizado!");
+                            }}
+                            className="px-2 py-1.5 text-xs"
+                            title="Definir data de follow-up"
+                            aria-label="Data de follow-up"
+                          />
                           <select
                             value={
                               job.application_stage ||
@@ -2987,7 +3508,8 @@ export default function HomePage() {
                         </div>
                       )}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
             </section>
@@ -3201,6 +3723,148 @@ export default function HomePage() {
                     ))}
                   </div>
                 </section>
+
+                {/* Lista de Bloqueio (Empresas & Palavras Indesejadas) */}
+                <section className="gupy-card space-y-4 p-5">
+                  <div className="flex items-center gap-2">
+                    <Ban className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                    <h2 className="font-bold">
+                      Lista de Bloqueio (Empresas &amp; Termos)
+                    </h2>
+                  </div>
+
+                  {/* Empresas ocultas */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                      Ocultar empresas
+                    </label>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const clean = blockedCompanyInput.trim();
+                        if (!clean) return;
+                        if (
+                          !blockedCompanies.some(
+                            (c) => c.toLowerCase() === clean.toLowerCase()
+                          )
+                        ) {
+                          void saveBlocklist(
+                            [...blockedCompanies, clean],
+                            blockedTerms,
+                            `Empresa "${clean}" bloqueada.`
+                          );
+                        }
+                        setBlockedCompanyInput("");
+                      }}
+                      className="flex gap-2"
+                    >
+                      <input
+                        type="text"
+                        value={blockedCompanyInput}
+                        onChange={(e) => setBlockedCompanyInput(e.target.value)}
+                        placeholder="Ex: Consultoria X"
+                        className="w-full px-3 py-1.5 text-xs outline-none"
+                      />
+                      <button
+                        type="submit"
+                        className="indeed-btn-secondary shrink-0 px-3 py-1.5 text-xs"
+                      >
+                        Ocultar
+                      </button>
+                    </form>
+                    {blockedCompanies.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {blockedCompanies.map((comp) => (
+                          <span
+                            key={comp}
+                            className="inline-flex items-center gap-1 rounded-md bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300"
+                          >
+                            {comp}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void saveBlocklist(
+                                  blockedCompanies.filter((c) => c !== comp),
+                                  blockedTerms,
+                                  `Empresa "${comp}" removida do bloqueio.`
+                                )
+                              }
+                              className="font-bold hover:opacity-75"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Termos negativos */}
+                  <div className="space-y-2 border-t border-[var(--border-color)] pt-3">
+                    <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                      Palavras negativas (excluir vagas contendo)
+                    </label>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const clean = blockedTermInput.trim();
+                        if (!clean) return;
+                        if (
+                          !blockedTerms.some(
+                            (t) => t.toLowerCase() === clean.toLowerCase()
+                          )
+                        ) {
+                          void saveBlocklist(
+                            blockedCompanies,
+                            [...blockedTerms, clean],
+                            `Termo "${clean}" bloqueado.`
+                          );
+                        }
+                        setBlockedTermInput("");
+                      }}
+                      className="flex gap-2"
+                    >
+                      <input
+                        type="text"
+                        value={blockedTermInput}
+                        onChange={(e) => setBlockedTermInput(e.target.value)}
+                        placeholder="Ex: PHP, Estágio, Presencial..."
+                        className="w-full px-3 py-1.5 text-xs outline-none"
+                      />
+                      <button
+                        type="submit"
+                        className="indeed-btn-secondary shrink-0 px-3 py-1.5 text-xs"
+                      >
+                        Bloquear
+                      </button>
+                    </form>
+                    {blockedTerms.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {blockedTerms.map((term) => (
+                          <span
+                            key={term}
+                            className="inline-flex items-center gap-1 rounded-md bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300"
+                          >
+                            -{term}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void saveBlocklist(
+                                  blockedCompanies,
+                                  blockedTerms.filter((t) => t !== term),
+                                  `Termo "${term}" removido do bloqueio.`
+                                )
+                              }
+                              className="font-bold hover:opacity-75"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
               </div>
 
               {/* Fontes */}
@@ -3397,6 +4061,15 @@ export default function HomePage() {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={testingSourceId === src.id}
+                            onClick={() => void handleTestSource(src)}
+                            className="indeed-btn-secondary px-2 py-1 text-[11px] disabled:opacity-50"
+                            title="Testar esta fonte agora"
+                          >
+                            {testingSourceId === src.id ? "..." : "Testar"}
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleToggleSource(src)}
@@ -3659,6 +4332,90 @@ export default function HomePage() {
                       </a>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* Editar Dados da Conta & Alterar Senha */}
+              <div className="rounded-xl border border-[var(--border-color)] p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+                    <KeyRound className="h-3.5 w-3.5 text-[var(--accent-bg)]" />
+                    Editar conta / Senha
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAccountEditOpen((v) => !v)}
+                    className="text-xs font-bold text-[var(--accent-bg)] hover:underline"
+                  >
+                    {accountEditOpen ? "Fechar" : "Editar"}
+                  </button>
+                </div>
+
+                {accountEditOpen && (
+                  <form
+                    onSubmit={handleUpdateAccount}
+                    className="mt-3 space-y-2.5 border-t border-[var(--border-color)] pt-3 text-xs"
+                  >
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+                        Nome completo
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAccountName}
+                        onChange={(e) => setEditAccountName(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+                        E-mail de acesso
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={editAccountEmail}
+                        onChange={(e) => setEditAccountEmail(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+                          Senha atual
+                        </label>
+                        <input
+                          type="password"
+                          value={editCurrentPassword}
+                          onChange={(e) =>
+                            setEditCurrentPassword(e.target.value)
+                          }
+                          placeholder="Se for trocar"
+                          className="w-full px-2.5 py-1.5 text-xs outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+                          Nova senha
+                        </label>
+                        <input
+                          type="password"
+                          value={editNewPassword}
+                          onChange={(e) => setEditNewPassword(e.target.value)}
+                          placeholder="Mín. 6 dígitos"
+                          className="w-full px-2.5 py-1.5 text-xs outline-none"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={savingAccount}
+                      className="indeed-btn-primary w-full py-2 text-xs disabled:opacity-50"
+                    >
+                      {savingAccount ? "Salvando..." : "Salvar alterações"}
+                    </button>
+                  </form>
                 )}
               </div>
 

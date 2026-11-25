@@ -13,6 +13,57 @@ function makeHash(input: string): string {
   return crypto.createHash("sha256").update(input).digest("hex").slice(0, 24);
 }
 
+function stripHtmlToText(
+  input: string | undefined,
+  maxLen = 1500
+): string | undefined {
+  if (!input) return undefined;
+  const $ = cheerio.load(`<div>${input}</div>`);
+  const text = $("div").text().replace(/\s+/g, " ").trim();
+  if (!text) return undefined;
+  return text.length > maxLen ? `${text.slice(0, maxLen).trim()}...` : text;
+}
+
+function extractSalaryFromText(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  const rx =
+    /(?:R\$\s?\d[\d.,]{2,}(?:\s?(?:-|–|a|até)\s?(?:R\$)?\s?\d[\d.,]{2,})?(?:\s*(?:\/|\s*por\s+)?(?:mês|mes|hora))?|(?:US\$|\$|€|£)\s?\d[\d.,]*(?:[kK]|,\d{3}|\.\d{3})(?:\s?(?:-|–|to)\s?(?:US\$|\$|€|£)?\s?\d[\d.,]*(?:[kK]|,\d{3}|\.\d{3})?)?(?:\s*(?:\/|\s*per\s+)?(?:yr|year|mo|month|hour|hr))?)/i;
+  const match = text.match(rx);
+  if (!match) return undefined;
+  const cleaned = match[0].replace(/\s+/g, " ").trim();
+  return cleaned.length >= 4 && cleaned.length <= 48 ? cleaned : undefined;
+}
+
+function formatSalaryRange(
+  min?: number | string | null,
+  max?: number | string | null,
+  currency = "USD"
+): string | undefined {
+  const numMin = Number(min);
+  const numMax = Number(max);
+  const hasMin = Number.isFinite(numMin) && numMin > 0;
+  const hasMax = Number.isFinite(numMax) && numMax > 0;
+  if (!hasMin && !hasMax) return undefined;
+
+  const sym =
+    currency === "BRL"
+      ? "R$ "
+      : currency === "EUR"
+        ? "€"
+        : currency === "GBP"
+          ? "£"
+          : "$";
+  const fmt = (n: number) =>
+    n >= 1000 && currency !== "BRL"
+      ? `${sym}${Math.round(n / 1000)}k`
+      : `${sym}${n.toLocaleString("pt-BR")}`;
+
+  if (hasMin && hasMax && numMin !== numMax) {
+    return `${fmt(numMin)} - ${fmt(numMax)}`;
+  }
+  return fmt(hasMin ? numMin : numMax);
+}
+
 async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -41,17 +92,26 @@ async function scrapeRemotive(): Promise<ScrapedJob[]> {
       candidate_required_location?: string;
       url: string;
       publication_date?: string;
+      salary?: string;
+      description?: string;
     }>;
   };
 
-  return (data.jobs ?? []).map((job) => ({
-    externalId: `remotive:${job.id}`,
-    title: job.title,
-    company: job.company_name || "Empresa não informada",
-    location: job.candidate_required_location || "Remoto",
-    url: job.url,
-    publishedAt: job.publication_date,
-  }));
+  return (data.jobs ?? []).map((job) => {
+    const description = stripHtmlToText(job.description);
+    return {
+      externalId: `remotive:${job.id}`,
+      title: job.title,
+      company: job.company_name || "Empresa não informada",
+      location: job.candidate_required_location || "Remoto",
+      url: job.url,
+      publishedAt: job.publication_date,
+      description,
+      salary:
+        job.salary?.trim() ||
+        extractSalaryFromText(`${job.title} ${description || ""}`),
+    };
+  });
 }
 
 async function scrapeArbeitnow(): Promise<ScrapedJob[]> {
@@ -65,19 +125,25 @@ async function scrapeArbeitnow(): Promise<ScrapedJob[]> {
       remote?: boolean;
       url: string;
       created_at?: number;
+      description?: string;
     }>;
   };
 
-  return (data.data ?? []).slice(0, 50).map((job) => ({
-    externalId: `arbeitnow:${job.slug}`,
-    title: job.title,
-    company: job.company_name || "Empresa não informada",
-    location: job.remote ? `${job.location || ""} (Remoto)`.trim() : job.location || "Não informado",
-    url: job.url,
-    publishedAt: job.created_at
-      ? new Date(job.created_at * 1000).toISOString()
-      : undefined,
-  }));
+  return (data.data ?? []).slice(0, 50).map((job) => {
+    const description = stripHtmlToText(job.description);
+    return {
+      externalId: `arbeitnow:${job.slug}`,
+      title: job.title,
+      company: job.company_name || "Empresa não informada",
+      location: job.remote ? `${job.location || ""} (Remoto)`.trim() : job.location || "Não informado",
+      url: job.url,
+      publishedAt: job.created_at
+        ? new Date(job.created_at * 1000).toISOString()
+        : undefined,
+      description,
+      salary: extractSalaryFromText(`${job.title} ${description || ""}`),
+    };
+  });
 }
 
 async function scrapeGreenhouse(target: string): Promise<ScrapedJob[]> {
@@ -88,7 +154,7 @@ async function scrapeGreenhouse(target: string): Promise<ScrapedJob[]> {
     .trim();
 
   const res = await fetchWithTimeout(
-    `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs`
+    `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`
   );
   const data = (await res.json()) as {
     jobs?: Array<{
@@ -97,17 +163,23 @@ async function scrapeGreenhouse(target: string): Promise<ScrapedJob[]> {
       location?: { name?: string };
       absolute_url: string;
       updated_at?: string;
+      content?: string;
     }>;
   };
 
-  return (data.jobs ?? []).map((job) => ({
-    externalId: `greenhouse:${slug}:${job.id}`,
-    title: job.title,
-    company: slug,
-    location: job.location?.name || "Não informado",
-    url: job.absolute_url,
-    publishedAt: job.updated_at,
-  }));
+  return (data.jobs ?? []).map((job) => {
+    const description = stripHtmlToText(job.content);
+    return {
+      externalId: `greenhouse:${slug}:${job.id}`,
+      title: job.title,
+      company: slug,
+      location: job.location?.name || "Não informado",
+      url: job.absolute_url,
+      publishedAt: job.updated_at,
+      description,
+      salary: extractSalaryFromText(`${job.title} ${description || ""}`),
+    };
+  });
 }
 
 async function scrapeLever(target: string): Promise<ScrapedJob[]> {
@@ -126,16 +198,23 @@ async function scrapeLever(target: string): Promise<ScrapedJob[]> {
     categories?: { location?: string; commitment?: string };
     hostedUrl: string;
     createdAt?: number;
+    descriptionPlain?: string;
+    description?: string;
   }>;
 
-  return (data ?? []).map((job) => ({
-    externalId: `lever:${slug}:${job.id}`,
-    title: job.text,
-    company: slug,
-    location: job.categories?.location || job.categories?.commitment || "Não informado",
-    url: job.hostedUrl,
-    publishedAt: job.createdAt ? new Date(job.createdAt).toISOString() : undefined,
-  }));
+  return (data ?? []).map((job) => {
+    const description = stripHtmlToText(job.descriptionPlain || job.description);
+    return {
+      externalId: `lever:${slug}:${job.id}`,
+      title: job.text,
+      company: slug,
+      location: job.categories?.location || job.categories?.commitment || "Não informado",
+      url: job.hostedUrl,
+      publishedAt: job.createdAt ? new Date(job.createdAt).toISOString() : undefined,
+      description,
+      salary: extractSalaryFromText(`${job.text} ${description || ""}`),
+    };
+  });
 }
 
 async function scrapeGupy(target: string): Promise<ScrapedJob[]> {
@@ -162,6 +241,7 @@ async function scrapeGupy(target: string): Promise<ScrapedJob[]> {
               id?: number | string;
               name?: string;
               title?: string;
+              description?: string;
               city?: string;
               state?: string;
               isRemoteWork?: boolean;
@@ -173,6 +253,7 @@ async function scrapeGupy(target: string): Promise<ScrapedJob[]> {
                 id?: number | string;
                 name?: string;
                 title?: string;
+                description?: string;
                 city?: string;
                 state?: string;
                 isRemoteWork?: boolean;
@@ -202,6 +283,7 @@ async function scrapeGupy(target: string): Promise<ScrapedJob[]> {
             ? `${locParts} (Remoto)`
             : "Remoto"
           : locParts || "Brasil";
+        const description = stripHtmlToText(item.description);
 
         jobs.push({
           externalId: `gupy:${makeHash(jobUrl)}`,
@@ -210,6 +292,8 @@ async function scrapeGupy(target: string): Promise<ScrapedJob[]> {
           location,
           url: jobUrl,
           publishedAt: item.publishedDate,
+          description,
+          salary: extractSalaryFromText(`${title} ${description || ""}`),
         });
       }
     } catch {
@@ -249,8 +333,10 @@ async function scrapeRss(url: string, sourceName: string): Promise<ScrapedJob[]>
     const link = $(el).find("link").first().text().trim();
     const pubDate = $(el).find("pubDate").first().text().trim();
     const guid = $(el).find("guid").first().text().trim() || link;
+    const rawDesc = $(el).find("description").first().text().trim();
     if (!title || !link) return;
 
+    const description = stripHtmlToText(rawDesc);
     jobs.push({
       externalId: `rss:${makeHash(guid)}`,
       title,
@@ -258,6 +344,8 @@ async function scrapeRss(url: string, sourceName: string): Promise<ScrapedJob[]>
       location: "Ver descrição",
       url: link,
       publishedAt: pubDate || undefined,
+      description,
+      salary: extractSalaryFromText(`${title} ${description || ""}`),
     });
   });
 
@@ -270,8 +358,12 @@ async function scrapeRss(url: string, sourceName: string): Promise<ScrapedJob[]>
         $(el).find("link").first().text().trim();
       const updated = $(el).find("updated").first().text().trim();
       const id = $(el).find("id").first().text().trim() || link;
+      const rawDesc =
+        $(el).find("summary").first().text().trim() ||
+        $(el).find("content").first().text().trim();
       if (!title || !link) return;
 
+      const description = stripHtmlToText(rawDesc);
       jobs.push({
         externalId: `atom:${makeHash(id)}`,
         title,
@@ -279,6 +371,8 @@ async function scrapeRss(url: string, sourceName: string): Promise<ScrapedJob[]>
         location: "Ver descrição",
         url: link,
         publishedAt: updated || undefined,
+        description,
+        salary: extractSalaryFromText(`${title} ${description || ""}`),
       });
     });
   }
@@ -373,20 +467,31 @@ async function scrapeRemoteOK(): Promise<ScrapedJob[]> {
     location?: string;
     url?: string;
     date?: string;
+    description?: string;
+    salary_min?: number;
+    salary_max?: number;
   }>;
 
   // O primeiro item do array da API do RemoteOK é metadado legal
   return (data ?? [])
     .slice(1, 51)
     .filter((item) => item.position && item.url)
-    .map((job) => ({
-      externalId: `remoteok:${job.id ?? makeHash(job.url!)}`,
-      title: job.position!,
-      company: job.company || "Empresa não informada",
-      location: job.location || "Remoto",
-      url: job.url!,
-      publishedAt: job.date,
-    }));
+    .map((job) => {
+      const description = stripHtmlToText(job.description);
+      const salary =
+        formatSalaryRange(job.salary_min, job.salary_max, "USD") ||
+        extractSalaryFromText(`${job.position} ${description || ""}`);
+      return {
+        externalId: `remoteok:${job.id ?? makeHash(job.url!)}`,
+        title: job.position!,
+        company: job.company || "Empresa não informada",
+        location: job.location || "Remoto",
+        url: job.url!,
+        publishedAt: job.date,
+        description,
+        salary,
+      };
+    });
 }
 
 async function scrapeJobicy(): Promise<ScrapedJob[]> {
@@ -401,17 +506,33 @@ async function scrapeJobicy(): Promise<ScrapedJob[]> {
       jobGeo?: string;
       url: string;
       pubDate?: string;
+      jobExcerpt?: string;
+      jobDescription?: string;
+      annualSalaryMin?: string | number;
+      annualSalaryMax?: string | number;
+      salaryCurrency?: string;
     }>;
   };
 
-  return (data.jobs ?? []).map((job) => ({
-    externalId: `jobicy:${job.id}`,
-    title: job.jobTitle,
-    company: job.companyName || "Empresa não informada",
-    location: job.jobGeo || "Remoto",
-    url: job.url,
-    publishedAt: job.pubDate,
-  }));
+  return (data.jobs ?? []).map((job) => {
+    const description = stripHtmlToText(job.jobExcerpt || job.jobDescription);
+    const salary =
+      formatSalaryRange(
+        job.annualSalaryMin,
+        job.annualSalaryMax,
+        job.salaryCurrency || "USD"
+      ) || extractSalaryFromText(`${job.jobTitle} ${description || ""}`);
+    return {
+      externalId: `jobicy:${job.id}`,
+      title: job.jobTitle,
+      company: job.companyName || "Empresa não informada",
+      location: job.jobGeo || "Remoto",
+      url: job.url,
+      publishedAt: job.pubDate,
+      description,
+      salary,
+    };
+  });
 }
 
 async function scrapeHimalayas(): Promise<ScrapedJob[]> {
@@ -424,6 +545,11 @@ async function scrapeHimalayas(): Promise<ScrapedJob[]> {
       locationRestrictions?: string[];
       applicationLink?: string;
       pubDate?: number;
+      excerpt?: string;
+      description?: string;
+      minSalary?: number;
+      maxSalary?: number;
+      currency?: string;
     }>;
   };
 
@@ -431,6 +557,10 @@ async function scrapeHimalayas(): Promise<ScrapedJob[]> {
     .filter((j) => j.title && (j.applicationLink || j.guid))
     .map((job) => {
       const url = job.applicationLink || job.guid!;
+      const description = stripHtmlToText(job.excerpt || job.description);
+      const salary =
+        formatSalaryRange(job.minSalary, job.maxSalary, job.currency || "USD") ||
+        extractSalaryFromText(`${job.title} ${description || ""}`);
       return {
         externalId: `himalayas:${makeHash(job.guid || url)}`,
         title: job.title,
@@ -443,6 +573,8 @@ async function scrapeHimalayas(): Promise<ScrapedJob[]> {
         publishedAt: job.pubDate
           ? new Date(job.pubDate * 1000).toISOString()
           : undefined,
+        description,
+        salary,
       };
     });
 }
@@ -454,7 +586,7 @@ async function scrapeAshby(target: string): Promise<ScrapedJob[]> {
     .trim();
 
   const res = await fetchWithTimeout(
-    `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}`
+    `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}?includeCompensation=true`
   );
   const data = (await res.json()) as {
     jobs?: Array<{
@@ -464,19 +596,34 @@ async function scrapeAshby(target: string): Promise<ScrapedJob[]> {
       isRemote?: boolean;
       jobUrl: string;
       publishedAt?: string;
+      descriptionPlain?: string;
+      descriptionHtml?: string;
+      compensation?: {
+        compensationTierSummary?: string;
+      };
     }>;
   };
 
-  return (data.jobs ?? []).map((job) => ({
-    externalId: `ashby:${slug}:${job.id}`,
-    title: job.title,
-    company: slug,
-    location: job.isRemote
-      ? `${job.location || ""} (Remoto)`.trim()
-      : job.location || "Não informado",
-    url: job.jobUrl,
-    publishedAt: job.publishedAt,
-  }));
+  return (data.jobs ?? []).map((job) => {
+    const description = stripHtmlToText(
+      job.descriptionPlain || job.descriptionHtml
+    );
+    const salary =
+      job.compensation?.compensationTierSummary?.trim() ||
+      extractSalaryFromText(`${job.title} ${description || ""}`);
+    return {
+      externalId: `ashby:${slug}:${job.id}`,
+      title: job.title,
+      company: slug,
+      location: job.isRemote
+        ? `${job.location || ""} (Remoto)`.trim()
+        : job.location || "Não informado",
+      url: job.jobUrl,
+      publishedAt: job.publishedAt,
+      description,
+      salary,
+    };
+  });
 }
 
 async function scrapeWorkable(target: string): Promise<ScrapedJob[]> {
@@ -535,25 +682,31 @@ async function scrapeGithubIssues(
     title: string;
     html_url: string;
     created_at?: string;
+    body?: string;
     pull_request?: unknown;
     labels?: Array<{ name?: string }>;
   }>;
 
   return (data ?? [])
     .filter((issue) => !issue.pull_request && issue.title)
-    .map((issue) => ({
-      externalId: `gh:${repo}:${issue.id}`,
-      title: issue.title,
-      company: sourceName,
-      location:
-        issue.labels
-          ?.map((l) => l.name)
-          .filter(Boolean)
-          .slice(0, 3)
-          .join(" • ") || "Brasil / Remoto",
-      url: issue.html_url,
-      publishedAt: issue.created_at,
-    }));
+    .map((issue) => {
+      const description = stripHtmlToText(issue.body);
+      return {
+        externalId: `gh:${repo}:${issue.id}`,
+        title: issue.title,
+        company: sourceName,
+        location:
+          issue.labels
+            ?.map((l) => l.name)
+            .filter(Boolean)
+            .slice(0, 3)
+            .join(" • ") || "Brasil / Remoto",
+        url: issue.html_url,
+        publishedAt: issue.created_at,
+        description,
+        salary: extractSalaryFromText(`${issue.title} ${description || ""}`),
+      };
+    });
 }
 
 async function scrapeTheMuse(): Promise<ScrapedJob[]> {
